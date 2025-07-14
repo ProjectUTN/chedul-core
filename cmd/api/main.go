@@ -15,8 +15,10 @@ func main() {
 		AllowHeaders: []string{"*"},
 		AllowMethods: []string{"*"},
 	}))
+	api.Use(middleware.Recover())
+	api.Use(handlers.TracingMiddleware("chedul-service"))
 
 	api.GET("/users", handlers.HandleGetUsers)
 
-	api.Start(os.Getenv("LISTEN_ADDR"))
+	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }
