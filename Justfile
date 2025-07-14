@@ -30,5 +30,5 @@ postgres:
   ./scripts/spawn_postgres.sh
 
 test dir="...":
-  go test ./{{dir}}
+  go test -v -cover ./{{dir}}
 
