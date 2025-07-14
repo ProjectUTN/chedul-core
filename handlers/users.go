@@ -3,7 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
-	"microser/db"
+	"chedul-core/db"
 	"net/http"
 	"strconv"
 

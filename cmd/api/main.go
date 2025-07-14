@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"microser/db"
-	"microser/handlers"
+	"chedul-core/db"
+	"chedul-core/handlers"
 	"os"
 
 	"github.com/labstack/echo/v4"
