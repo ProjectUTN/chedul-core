@@ -1,9 +1,10 @@
 package handlers
 
 import (
+	"chedul-core/db"
+	"chedul-core/domain"
 	"database/sql"
 	"fmt"
-	"chedul-core/db"
 	"net/http"
 	"strconv"
 
@@ -13,19 +14,19 @@ import (
 
 type User struct {
 	bun.BaseModel `bun:"table:users"`
-	ID            int64  `json:"id" bun:"id,pk,autoincrement"`
-	Nombre        string `json:"nombre" bun:"name,notnull"`
-	Email         string `json:"email" bun:"email,unique"`
+	ID            int64            `json:"id" bun:"id,pk,autoincrement"`
+	Nombre        domain.UserName  `json:"nombre" bun:"name,notnull"`
+	Email         domain.UserEmail `json:"email" bun:"email,unique"`
 }
 
 type CreateUserRequest struct {
-	Nombre string `json:"nombre" validate:"required, min=2, max=100"`
-	Email  string `json:"email" validate:"required,email"`
+	Nombre domain.UserName  `json:"nombre"`
+	Email  domain.UserEmail `json:"email"`
 }
 
 type UpdateUserRequest struct {
-	Nombre string `json:"nombre" validate:"min=2,max=100"`
-	Email  string `json:"email" validate:"email"`
+	Nombre domain.UserName  `json:"nombre"`
+	Email  domain.UserEmail `json:"email"`
 }
 
 type ErrorResponse struct {
@@ -91,23 +92,10 @@ func HandlePostUser(c echo.Context) error {
 
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
+		// TODO: Tendria que loggear el error en INFO o DEBUG
 		return c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "invalid_request",
 			Message: "Datos de solicitud inválidos",
-		})
-	}
-
-	if req.Nombre == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: "El nombre es requerido",
-		})
-	}
-
-	if req.Email == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: "El email es requerido",
 		})
 	}
 

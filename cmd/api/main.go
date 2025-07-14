@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"chedul-core/db"
 	"chedul-core/handlers"
+	"fmt"
 	"os"
 
 	"github.com/labstack/echo/v4"
@@ -23,6 +23,7 @@ func main() {
 		AllowHeaders: []string{"*"},
 		AllowMethods: []string{"*"},
 	}))
+
 	api.Use(middleware.Recover())
 	api.Use(handlers.TracingMiddleware("chedul-service"))
 
