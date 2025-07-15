@@ -18,6 +18,7 @@ func InitLogger() error {
 		config.DisableStacktrace = true
 	} else {
 		config = zap.NewDevelopmentConfig()
+		config.DisableStacktrace = true
 	}
 
 	config.EncoderConfig.TimeKey = "timestamp"

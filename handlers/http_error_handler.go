@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"chedul-core/logger"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"go.uber.org/zap"
 )
 
 func HttpErrorHandler(err error, c echo.Context) {
@@ -13,6 +15,12 @@ func HttpErrorHandler(err error, c echo.Context) {
 
 	if apiErr, ok := err.(ApiError); ok {
 		c.JSON(apiErr.StatusCode, apiErr)
+	} else if httpErr, ok := err.(*echo.HTTPError); ok {
+		errResp := map[string]any{
+			"statusCode": httpErr.Code,
+			"msg":        httpErr.Message,
+		}
+		c.JSON(httpErr.Code, errResp)
 	} else {
 		errResp := map[string]any{
 			"statusCode": http.StatusInternalServerError,
@@ -21,6 +29,8 @@ func HttpErrorHandler(err error, c echo.Context) {
 		c.JSON(http.StatusInternalServerError, errResp)
 	}
 
-	c.Logger().Error("HTTP API Error ", "err ", err.Error(), " path:", c.Request().URL.Path)
-
+	logger.GetLoggerFromCtx(c).Error("HTTP API Error ",
+		zap.String("err", err.Error()),
+		zap.String("path", c.Request().URL.Path),
+	)
 }
