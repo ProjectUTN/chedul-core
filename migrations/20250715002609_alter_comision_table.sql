@@ -7,5 +7,5 @@ foreign key (materia_id) references materia(id);
 
 -- +goose Down
 -- +goose StatementBegin
-SELECT 'down SQL query';
+alter table comision drop constraint fk_materia;
 -- +goose StatementEnd

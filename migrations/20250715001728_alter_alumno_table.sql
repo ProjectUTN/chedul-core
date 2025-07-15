@@ -7,5 +7,5 @@ foreign key (carrera_id) references carrera(id) on delete cascade;
 
 -- +goose Down
 -- +goose StatementBegin
--- SELECT 'down SQL query';
+alter table alumno drop constraint fk_carrera
 -- +goose StatementEnd
