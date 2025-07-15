@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"chedul-core/util"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -21,13 +22,20 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 			)
 
 			c.Set("Logger", requestLogger)
-
 			requestLogger.Info("Request started")
+
 			err := next(c)
 			duration := time.Since(start)
 
+			status := c.Response().Status
+			if err != nil {
+				if httpErr, ok := err.(*echo.HTTPError); ok {
+					status = httpErr.Code
+				}
+			}
+
 			logFields := []zap.Field{
-				zap.Int("status", c.Response().Status),
+				zap.Int("status", status),
 				zap.Duration("duration", duration),
 				zap.Int64("response_size", c.Response().Size),
 			}
@@ -46,7 +54,14 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 }
 
 func initLogger() *zap.Logger {
-	config := zap.NewDevelopmentConfig()
+	var config zap.Config
+	if util.IsEnvProd() {
+		config = zap.NewProductionConfig()
+		config.DisableStacktrace = true
+	} else {
+		config = zap.NewDevelopmentConfig()
+	}
+
 	config.EncoderConfig.TimeKey = "timestamp"
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder

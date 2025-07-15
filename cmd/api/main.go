@@ -19,6 +19,7 @@ func main() {
 
 	api := echo.New()
 	api.HideBanner = true
+
 	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{"*"},

@@ -29,6 +29,9 @@ reset:
 postgres:
   ./scripts/spawn_postgres.sh
 
+kill-db:
+  docker kill chedul-db
+
 test dir="...":
   go test -v -cover ./{{dir}}
 
