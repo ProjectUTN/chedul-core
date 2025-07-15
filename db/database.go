@@ -46,6 +46,10 @@ func InitDB() (*bun.DB, error) {
 		db, err = createConnection()
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	if !util.IsEnvProd() {
 		db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
 	}
@@ -55,8 +59,7 @@ func InitDB() (*bun.DB, error) {
 
 func createConnection() (*bun.DB, error) {
 	if err := godotenv.Load(); err != nil {
-		// TODO: Reemplazar con un log
-		fmt.Printf("No se pudo leer el .env")
+		return nil, fmt.Errorf("No se encontró el '.env'")
 	}
 
 	dbConfig := getDatabaseConfig()
