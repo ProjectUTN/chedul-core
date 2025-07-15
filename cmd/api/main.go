@@ -25,6 +25,7 @@ func main() {
 
 	api := echo.New()
 	api.HideBanner = true
+	api.HTTPErrorHandler = handlers.HttpErrorHandler
 
 	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},

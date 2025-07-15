@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -24,32 +23,8 @@ func NewAlumnoName(s string) (AlumnoName, error) {
 	}
 
 	if hasInvalidChar || emptyOrWhitespace || isTooLong {
-		return "", fmt.Errorf("%s es un nombre invalido", s)
+		return "", fmt.Errorf("''%s' es un nombre invalido", s)
 	}
 
 	return AlumnoName(s), nil
-}
-
-func (self AlumnoName) String() string {
-	return string(self)
-}
-
-func (self AlumnoName) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(self))
-}
-
-func (self *AlumnoName) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	name, err := NewAlumnoName(s)
-	if err != nil {
-		return err
-	}
-
-	*self = name
-
-	return nil
 }

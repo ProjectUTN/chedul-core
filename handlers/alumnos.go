@@ -10,27 +10,40 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
-	"go.uber.org/zap"
 )
 
 type Alumno struct {
 	bun.BaseModel `bun:"table:alumno"`
-	ID            int64              `json:"id" bun:"id,pk,autoincrement"`
-	Nombre        domain.AlumnoName  `json:"nombre" bun:"nombre,notnull"`
-	Email         domain.AlumnoEmail `json:"email" bun:"email,unique"`
-	Carrera       int64              `json:"carrera" bun:"carrera_id,notnull"`
+	ID            int64  `json:"id" bun:"id,pk,autoincrement"`
+	Nombre        string `json:"nombre" bun:"nombre,notnull"`
+	Email         string `json:"email" bun:"email,unique"`
+	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
 }
 
 type CreateUserRequest struct {
-	Nombre  domain.AlumnoName  `json:"nombre"`
-	Email   domain.AlumnoEmail `json:"email"`
-	Carrera string             `json:"carrera"`
+	Nombre  string `json:"nombre"`
+	Email   string `json:"email"`
+	Carrera string `json:"carrera"`
+}
+
+func (self *CreateUserRequest) Validate() map[string]string {
+	errors := make(map[string]string)
+
+	if _, err := domain.NewAlumnoName(self.Nombre); err != nil {
+		errors["nombre"] = err.Error()
+	}
+
+	if _, err := domain.NewAlumnoEmail(self.Email); err != nil {
+		errors["email"] = err.Error()
+	}
+
+	return errors
 }
 
 type UpdateUserRequest struct {
-	Nombre  domain.AlumnoName  `json:"nombre"`
-	Email   domain.AlumnoEmail `json:"email"`
-	Carrera string             `json:"carrera"`
+	Nombre  string `json:"nombre"`
+	Email   string `json:"email"`
+	Carrera string `json:"carrera"`
 }
 
 func HandleGetAlumnos(c echo.Context) error {
@@ -45,16 +58,13 @@ func HandleGetAlumnos(c echo.Context) error {
 	err := conn.NewSelect().Model(&users).Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			logger.Warn("No hay alumnos registrados", zap.Error(err))
-			return c.JSON(http.StatusOK, []Alumno{})
+			return c.JSON(http.StatusNotFound, []Alumno{})
 		}
 
-		logger.Error("Error al retirar alumnos", zap.Error(err))
-		return c.JSON(http.StatusInternalServerError, "internal server error")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, users)
-
 }
 
 func HandleGetAlumno(c echo.Context) error {
@@ -64,7 +74,7 @@ func HandleGetAlumno(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, "ID de usuario inválido")
+		return err
 	}
 
 	var user Alumno
@@ -74,7 +84,7 @@ func HandleGetAlumno(c echo.Context) error {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, "Usuario no encontrado")
 		}
-		return c.JSON(http.StatusInternalServerError, "Fallo al obtener usuario")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -86,13 +96,16 @@ func HandlePostAlumno(c echo.Context) error {
 
 	var req CreateUserRequest
 	if err := c.Bind(&req); err != nil {
-		// TODO: Tendria que loggear el error en INFO o DEBUG
-		return c.JSON(http.StatusBadRequest, "Datos de solicitud inválidos")
+		return InvalidJSON()
+	}
+
+	if errors := req.Validate(); len(errors) > 0 {
+		return InvalidRequestData(errors)
 	}
 
 	var carrera_id int64
 	if err := conn.NewRaw("select id from ? where nombre = ?", bun.Ident("carrera"), req.Carrera).Scan(ctx, &carrera_id); err != nil {
-		return c.JSON(http.StatusInternalServerError, "Fallo al crear usuario")
+		return err
 	}
 
 	user := Alumno{
@@ -106,7 +119,7 @@ func HandlePostAlumno(c echo.Context) error {
 		Exec(ctx)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, "Fallo al crear usuario")
+		return err
 	}
 
 	return c.JSON(http.StatusCreated, user)
