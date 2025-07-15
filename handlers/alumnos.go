@@ -20,13 +20,13 @@ type Alumno struct {
 	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
 }
 
-type CreateUserRequest struct {
+type UserRequest struct {
 	Nombre  string `json:"nombre"`
 	Email   string `json:"email"`
 	Carrera string `json:"carrera"`
 }
 
-func (self *CreateUserRequest) Validate() map[string]string {
+func (self *UserRequest) Validate() map[string]string {
 	errors := make(map[string]string)
 
 	if _, err := domain.NewAlumnoName(self.Nombre); err != nil {
@@ -38,12 +38,6 @@ func (self *CreateUserRequest) Validate() map[string]string {
 	}
 
 	return errors
-}
-
-type UpdateUserRequest struct {
-	Nombre  string `json:"nombre"`
-	Email   string `json:"email"`
-	Carrera string `json:"carrera"`
 }
 
 func HandleGetAlumnos(c echo.Context) error {
@@ -94,7 +88,7 @@ func HandlePostAlumno(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
-	var req CreateUserRequest
+	var req UserRequest
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
 	}
@@ -132,12 +126,16 @@ func HandlePutAlumno(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, "ID de usuario inválido")
+		return err
 	}
 
-	var req UpdateUserRequest
+	var req UserRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, "Datos de solicitud inválidos")
+		return InvalidJSON()
+	}
+
+	if errors := req.Validate(); len(errors) > 0 {
+		return InvalidRequestData(errors)
 	}
 
 	var user Alumno
@@ -150,7 +148,7 @@ func HandlePutAlumno(c echo.Context) error {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, "Usuario no encontrado")
 		}
-		return c.JSON(http.StatusInternalServerError, "Fallo al verificar usuario")
+		return err
 	}
 
 	updateQuery := conn.NewUpdate().
@@ -171,12 +169,12 @@ func HandlePutAlumno(c echo.Context) error {
 	}
 
 	if !updated {
-		return c.JSON(http.StatusBadRequest, "No se proporcionaron campos para actualizar")
+		return InvalidJSON()
 	}
 
 	_, err = updateQuery.Exec(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, "Fallo al actualizar usuario")
+		return err
 	}
 
 	return c.JSON(http.StatusOK, user)
@@ -190,7 +188,7 @@ func HandleDeleteAlumno(c echo.Context) error {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, "ID de usuario inválido")
+		return err
 	}
 
 	var user Alumno
@@ -203,7 +201,7 @@ func HandleDeleteAlumno(c echo.Context) error {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, "Usuario no encontrado")
 		}
-		return c.JSON(http.StatusInternalServerError, "Fallo al verificar usuario")
+		return err
 	}
 
 	_, err = conn.NewDelete().
@@ -212,7 +210,7 @@ func HandleDeleteAlumno(c echo.Context) error {
 		Exec(ctx)
 
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, "Fallo al eliminar usuario")
+		return err
 	}
 
 	return c.JSON(http.StatusOK,
