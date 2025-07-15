@@ -6,33 +6,33 @@ import (
 	"net/mail"
 )
 
-type UserEmail string
+type AlumnoEmail string
 
-func NewUserEmail(s string) (UserEmail, error) {
+func NewAlumnoEmail(s string) (AlumnoEmail, error) {
 	addr, err := mail.ParseAddress(s)
 
 	if err != nil {
 		return "", fmt.Errorf("formato invalido: %v", err)
 	}
 
-	return UserEmail(addr.Address), nil
+	return AlumnoEmail(addr.Address), nil
 }
 
-func (self UserEmail) String() string {
+func (self AlumnoEmail) String() string {
 	return string(self)
 }
 
-func (self UserEmail) MarshalJSON() ([]byte, error) {
+func (self AlumnoEmail) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(self))
 }
 
-func (self *UserEmail) UnmarshalJSON(data []byte) error {
+func (self *AlumnoEmail) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
 
-	addr, err := NewUserEmail(s)
+	addr, err := NewAlumnoEmail(s)
 	if err != nil {
 		return err
 	}

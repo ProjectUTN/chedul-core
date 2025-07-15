@@ -1,8 +1,9 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists Alumno (
+create table if not exists alumno (
     id int generated always as identity primary key not null,
-    nombre text not null unique,
+    nombre text not null,
+    email text unique,
     carrera_id int not null
 );
 -- +goose StatementEnd
@@ -10,5 +11,5 @@ create table if not exists Alumno (
 
 -- +goose Down
 -- +goose StatementBegin
-drop table Alumno;
+drop table alumno;
 -- +goose StatementEnd

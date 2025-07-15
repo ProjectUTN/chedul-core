@@ -6,17 +6,17 @@ import (
 	"testing"
 )
 
-func TestNewUserName(t *testing.T) {
+func TestNewAlumnoName(t *testing.T) {
 	tests := []struct {
 		description string
 		s           string
-		want        domain.UserName
+		want        domain.AlumnoName
 		wantErr     bool
 	}{
 		{
 			description: "a_256_graphene_long_name_is_valid",
 			s:           strings.Repeat("a", 256),
-			want:        domain.UserName(strings.Repeat("a", 256)),
+			want:        domain.AlumnoName(strings.Repeat("a", 256)),
 			wantErr:     false,
 		},
 		{
@@ -32,14 +32,14 @@ func TestNewUserName(t *testing.T) {
 		{
 			description: "a_valid_name_is_parsed_successfully",
 			s:           "Chedul Chedulero",
-			want:        domain.UserName("Chedul Chedulero"),
+			want:        domain.AlumnoName("Chedul Chedulero"),
 			wantErr:     false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
-			got, gotErr := domain.NewUserName(tt.s)
+			got, gotErr := domain.NewAlumnoName(tt.s)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("NewUserName() falló inesperadamente: %v", gotErr)
@@ -58,11 +58,11 @@ func TestNewUserName(t *testing.T) {
 	}
 }
 
-func TestNewUserName_with_forbidden_characters(t *testing.T) {
+func TestNewAlumnoName_with_forbidden_characters(t *testing.T) {
 	forbidden := []rune{'/', '(', ')', '"', '<', '>', '\\', '{', '}'}
 	for _, ch := range forbidden {
 		t.Run("forbidden_char_"+string(ch), func(t *testing.T) {
-			_, err := domain.NewUserName(string(ch))
+			_, err := domain.NewAlumnoName(string(ch))
 			if err == nil {
 				t.Errorf("se esperaba error para la entrada %q, pero no se obtuvo", ch)
 			}

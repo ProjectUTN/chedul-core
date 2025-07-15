@@ -1,8 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
-alter table Comision
+alter table comision
 add constraint fk_materia
-foreign key (materia_id) references Materia(id);
+foreign key (materia_id) references materia(id);
 -- +goose StatementEnd
 
 -- +goose Down

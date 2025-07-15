@@ -1,12 +1,12 @@
 -- +goose Up
 -- +goose StatementBegin
-alter table Aporte
+alter table aporte
 add constraint fk_alumno
-foreign key (alumno_id) references Alumno(id);
+foreign key (alumno_id) references alumno(id);
 
-alter table Aporte
+alter table aporte
 add constraint fk_materia
-foreign key (materia_id) references Materia(id);
+foreign key (materia_id) references materia(id);
 
 -- +goose StatementEnd
 

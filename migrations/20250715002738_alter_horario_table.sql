@@ -1,8 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
-alter table Horario
+alter table horario
 add constraint fk_comision
-foreign key (comision_id) references Comision(id);
+foreign key (comision_id) references comision(id);
 -- +goose StatementEnd
 
 -- +goose Down

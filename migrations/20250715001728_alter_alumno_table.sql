@@ -1,8 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
-alter table Alumno
+alter table alumno
 add constraint fk_carrera
-foreign key (carrera_id) references Carrera(id) on delete cascade;
+foreign key (carrera_id) references carrera(id) on delete cascade;
 -- +goose StatementEnd
 
 -- +goose Down

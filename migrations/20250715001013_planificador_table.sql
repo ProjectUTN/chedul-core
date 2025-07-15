@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists Planificador(
+create table if not exists planificador(
     id int generated always as identity primary key not null,
     nombre text not null,
     alumno_id int not null,
@@ -14,5 +14,5 @@ create table if not exists Planificador(
 
 -- +goose Down
 -- +goose StatementBegin
-drop table Planificador;
+drop table planificador;
 -- +goose StatementEnd

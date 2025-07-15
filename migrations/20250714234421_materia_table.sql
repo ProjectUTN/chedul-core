@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists Materia (
+create table if not exists materia (
     id int generated always as identity primary key not null,
     nombre text not null unique,
     carga_horaria int not null,
@@ -16,5 +16,5 @@ create table if not exists Materia (
 
 -- +goose Down
 -- +goose StatementBegin
-drop table Materia;
+drop table materia;
 -- +goose StatementEnd

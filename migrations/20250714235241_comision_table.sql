@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists Comision(
+create table if not exists comision(
     id int generated always as identity primary key not null,
     codigo text,
     materia_id int not null
@@ -9,5 +9,5 @@ create table if not exists Comision(
 
 -- +goose Down
 -- +goose StatementBegin
-drop table Comision;
+drop table comision;
 -- +goose StatementEnd

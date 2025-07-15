@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists Aporte (
+create table if not exists aporte (
     id int generated always as identity primary key not null,
     titulo text not null,
     alumno_id int not null,
@@ -14,5 +14,5 @@ create table if not exists Aporte (
 
 -- +goose Down
 -- +goose StatementBegin
-drop table Aporte;
+drop table aporte;
 -- +goose StatementEnd

@@ -1,8 +1,8 @@
 -- +goose Up
 -- +goose StatementBegin
-alter table Materia
+alter table materia
 add constraint fk_correlativa
-foreign key (correlativa_id) references Materia(id);
+foreign key (correlativa_id) references materia(id);
 -- +goose StatementEnd
 
 -- +goose Down
