@@ -3,12 +3,14 @@ package handlers
 import (
 	"chedul-core/db"
 	"chedul-core/domain"
+	"chedul-core/logger"
 	"database/sql"
 	"net/http"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
+	"go.uber.org/zap"
 )
 
 type Alumno struct {
@@ -34,15 +36,20 @@ type UpdateUserRequest struct {
 func HandleGetAlumnos(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
+	logger := logger.GetLoggerFromCtx(c)
+
+	logger.Info("Buscando todos los alumnos")
 
 	users := []Alumno{}
 
 	err := conn.NewSelect().Model(&users).Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			logger.Warn("No hay alumnos registrados", zap.Error(err))
 			return c.JSON(http.StatusOK, []Alumno{})
 		}
 
+		logger.Error("Error al retirar alumnos", zap.Error(err))
 		return c.JSON(http.StatusInternalServerError, "internal server error")
 	}
 

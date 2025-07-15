@@ -1,19 +1,18 @@
 package handlers
 
 import (
-	"chedul-core/util"
+	"chedul-core/logger"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			start := time.Now()
-			logger := initLogger()
+			logger := logger.GetLogger()
 
 			requestLogger := logger.With(
 				zap.String("method", c.Request().Method),
@@ -51,21 +50,4 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 
 		}
 	}
-}
-
-func initLogger() *zap.Logger {
-	var config zap.Config
-	if util.IsEnvProd() {
-		config = zap.NewProductionConfig()
-		config.DisableStacktrace = true
-	} else {
-		config = zap.NewDevelopmentConfig()
-	}
-
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
-
-	logger, _ := config.Build()
-	return logger
 }

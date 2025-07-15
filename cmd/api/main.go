@@ -3,18 +3,24 @@ package main
 import (
 	"chedul-core/db"
 	"chedul-core/handlers"
+	"chedul-core/logger"
 	"fmt"
 	"os"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"go.uber.org/zap"
 )
 
 func main() {
-	_, err := db.InitDB()
+	if err := logger.InitLogger(); err != nil {
+		fmt.Println("Error iniciando logger:", err)
+		os.Exit(1)
+	}
 
-	if err != nil {
-		fmt.Println("Error al conectar con la DB", err)
+	if _, err := db.InitDB(); err != nil {
+		logger.GetLogger().Error("Error al conectar con la DB", zap.Error(err))
+		os.Exit(1)
 	}
 
 	api := echo.New()
