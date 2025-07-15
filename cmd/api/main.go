@@ -18,6 +18,7 @@ func main() {
 	}
 
 	api := echo.New()
+	api.HideBanner = true
 	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{"*"},
@@ -27,11 +28,11 @@ func main() {
 	api.Use(middleware.Recover())
 	api.Use(handlers.TracingMiddleware("chedul-service"))
 
-	api.GET("/users", handlers.HandleGetUsers)
-	api.GET("/users/:id", handlers.HandleGetUser)
-	api.POST("/users", handlers.HandlePostUser)
-	api.PUT("/users", handlers.HandlePutUser)
-	api.DELETE("/users/:id", handlers.HandleDeleteUser)
+	api.GET("/alumnos", handlers.HandleGetAlumnos)
+	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
+	api.POST("/alumnos", handlers.HandlePostAlumno)
+	api.PUT("/alumnos", handlers.HandlePutAlumno)
+	api.DELETE("/alumnos/:id", handlers.HandleDeleteAlumno)
 
 	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }

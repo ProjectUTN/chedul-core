@@ -8,9 +8,9 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-type UserName string
+type AlumnoName string
 
-func NewUserName(s string) (UserName, error) {
+func NewAlumnoName(s string) (AlumnoName, error) {
 	emptyOrWhitespace := strings.TrimSpace(s) == ""
 	isTooLong := uniseg.GraphemeClusterCount(s) > 256
 	forbiddenChars := []rune{'/', '(', ')', '"', '<', '>', '\\', '{', '}'}
@@ -27,24 +27,24 @@ func NewUserName(s string) (UserName, error) {
 		return "", fmt.Errorf("%s es un nombre invalido", s)
 	}
 
-	return UserName(s), nil
+	return AlumnoName(s), nil
 }
 
-func (self UserName) String() string {
+func (self AlumnoName) String() string {
 	return string(self)
 }
 
-func (self UserName) MarshalJSON() ([]byte, error) {
+func (self AlumnoName) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(self))
 }
 
-func (self *UserName) UnmarshalJSON(data []byte) error {
+func (self *AlumnoName) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
 
-	name, err := NewUserName(s)
+	name, err := NewAlumnoName(s)
 	if err != nil {
 		return err
 	}

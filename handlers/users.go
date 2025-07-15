@@ -12,21 +12,24 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type User struct {
-	bun.BaseModel `bun:"table:users"`
-	ID            int64            `json:"id" bun:"id,pk,autoincrement"`
-	Nombre        domain.UserName  `json:"nombre" bun:"name,notnull"`
-	Email         domain.UserEmail `json:"email" bun:"email,unique"`
+type Alumno struct {
+	bun.BaseModel `bun:"table:alumno"`
+	ID            int64              `json:"id" bun:"id,pk,autoincrement"`
+	Nombre        domain.AlumnoName  `json:"nombre" bun:"nombre,notnull"`
+	Email         domain.AlumnoEmail `json:"email" bun:"email,unique"`
+	Carrera       int64              `json:"carrera" bun:"carrera_id,notnull"`
 }
 
 type CreateUserRequest struct {
-	Nombre domain.UserName  `json:"nombre"`
-	Email  domain.UserEmail `json:"email"`
+	Nombre  domain.AlumnoName  `json:"nombre"`
+	Email   domain.AlumnoEmail `json:"email"`
+	Carrera string             `json:"carrera"`
 }
 
 type UpdateUserRequest struct {
-	Nombre domain.UserName  `json:"nombre"`
-	Email  domain.UserEmail `json:"email"`
+	Nombre  domain.AlumnoName  `json:"nombre"`
+	Email   domain.AlumnoEmail `json:"email"`
+	Carrera string             `json:"carrera"`
 }
 
 type ErrorResponse struct {
@@ -34,16 +37,16 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-func HandleGetUsers(c echo.Context) error {
+func HandleGetAlumnos(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
-	users := []User{}
+	users := []Alumno{}
 
 	err := conn.NewSelect().Model(&users).Scan(ctx)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return c.JSON(http.StatusOK, []User{})
+			return c.JSON(http.StatusOK, []Alumno{})
 		}
 
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Fallo al retirar usuarios"})
@@ -53,7 +56,7 @@ func HandleGetUsers(c echo.Context) error {
 
 }
 
-func HandleGetUser(c echo.Context) error {
+func HandleGetAlumno(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
@@ -66,7 +69,7 @@ func HandleGetUser(c echo.Context) error {
 		})
 	}
 
-	var user User
+	var user Alumno
 	err = conn.NewSelect().Model(&user).Where("id=?", id).Scan(ctx)
 
 	if err != nil {
@@ -86,7 +89,7 @@ func HandleGetUser(c echo.Context) error {
 	return c.JSON(http.StatusOK, user)
 }
 
-func HandlePostUser(c echo.Context) error {
+func HandlePostAlumno(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
@@ -99,9 +102,19 @@ func HandlePostUser(c echo.Context) error {
 		})
 	}
 
-	user := User{
-		Nombre: req.Nombre,
-		Email:  req.Email,
+	var carrera_id int64
+	if err := conn.NewRaw("select id from ? where nombre = ?", bun.Ident("carrera"), req.Carrera).Scan(ctx, &carrera_id); err != nil {
+		err_msg := fmt.Sprintf("Fallo al crear usuario: %v", err)
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: err_msg,
+		})
+	}
+
+	user := Alumno{
+		Nombre:  req.Nombre,
+		Email:   req.Email,
+		Carrera: carrera_id,
 	}
 
 	_, err := conn.NewInsert().
@@ -119,7 +132,7 @@ func HandlePostUser(c echo.Context) error {
 	return c.JSON(http.StatusCreated, user)
 }
 
-func HandlePutUser(c echo.Context) error {
+func HandlePutAlumno(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
@@ -140,7 +153,7 @@ func HandlePutUser(c echo.Context) error {
 		})
 	}
 
-	var user User
+	var user Alumno
 	err = conn.NewSelect().
 		Model(&user).
 		Where("id = ?", id).
@@ -195,7 +208,7 @@ func HandlePutUser(c echo.Context) error {
 
 }
 
-func HandleDeleteUser(c echo.Context) error {
+func HandleDeleteAlumno(c echo.Context) error {
 	conn := db.GetDB()
 	ctx := c.Request().Context()
 
@@ -208,7 +221,7 @@ func HandleDeleteUser(c echo.Context) error {
 		})
 	}
 
-	var user User
+	var user Alumno
 	err = conn.NewSelect().
 		Model(&user).
 		Where("id = ?", id).
@@ -228,7 +241,7 @@ func HandleDeleteUser(c echo.Context) error {
 	}
 
 	_, err = conn.NewDelete().
-		Model((*User)(nil)).
+		Model((*Alumno)(nil)).
 		Where("id = ?", id).
 		Exec(ctx)
 
