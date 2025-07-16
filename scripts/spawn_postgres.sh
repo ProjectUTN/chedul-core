@@ -45,6 +45,7 @@ echo "🚀 Creando e iniciando contenedor PostgreSQL..."
 docker run -d \
     --name $CONTAINER_NAME \
     --network host \
+    -p 5432:5432 \
     -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
     -e POSTGRES_USER=$POSTGRES_USER \
     -e POSTGRES_DB=$POSTGRES_DB \
