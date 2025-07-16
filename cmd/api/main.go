@@ -26,9 +26,7 @@ func main() {
 	}
 
 	api := echo.New()
-	api.HideBanner = true
-	api.HTTPErrorHandler = handlers.HttpErrorHandler
-
+	api.Use(handlers.AppContextMiddleware(pg_pool, logger))
 	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{"*"},
@@ -37,7 +35,9 @@ func main() {
 
 	api.Use(middleware.Recover())
 	api.Use(handlers.TracingMiddleware("chedul-service"))
-	api.Use(handlers.AppContextMiddleware(pg_pool, logger))
+
+	api.HideBanner = true
+	api.HTTPErrorHandler = handlers.HttpErrorHandler
 
 	api.GET("/alumnos", handlers.HandleGetAlumnos)
 	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
