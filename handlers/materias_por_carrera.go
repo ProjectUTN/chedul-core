@@ -9,7 +9,6 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// MateriasPorCarrera es el modelo de la tabla intermedia que une materias y carreras.
 type MateriasPorCarrera struct {
 	bun.BaseModel `bun:"table:materiasporcarrera"`
 	ID            int64 `json:"id" bun:"id,pk,autoincrement"`
@@ -17,12 +16,10 @@ type MateriasPorCarrera struct {
 	MateriaID     int64 `json:"materia_id" bun:"materia_id,notnull"`
 }
 
-// HandleAsociarMateriaACarrera crea una nueva entrada en la tabla materiasporcarrera.
 func HandleAsociarMateriaACarrera(c echo.Context) error {
 	ctx := c.(*AppContext)
 	conn := ctx.conn
 
-	// Obtener IDs desde los parámetros de la URL
 	carreraID, err := strconv.ParseInt(c.Param("carrera_id"), 10, 64)
 	if err != nil {
 		return NewApiError(http.StatusBadRequest, fmt.Errorf("ID de carrera inválido"))
@@ -33,17 +30,14 @@ func HandleAsociarMateriaACarrera(c echo.Context) error {
 		return NewApiError(http.StatusBadRequest, fmt.Errorf("ID de materia inválido"))
 	}
 
-	// Crear la instancia del modelo de la tabla intermedia
 	asociacion := MateriasPorCarrera{
 		CarreraID: carreraID,
 		MateriaID: materiaID,
 	}
 
-	// Insertar la nueva asociación en la base de datos
 	_, err = conn.NewInsert().Model(&asociacion).Exec(ctx.Request().Context())
 	if err != nil {
-		// Podría fallar si la combinación ya existe (si tuvieras una restricción UNIQUE)
-		// o si alguno de los IDs no existe en sus respectivas tablas.
+
 		return err
 	}
 

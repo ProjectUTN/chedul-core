@@ -44,6 +44,9 @@ func main() {
 	api.POST("/alumnos", handlers.HandlePostAlumno)
 	api.PUT("/alumnos", handlers.HandlePutAlumno)
 	api.DELETE("/alumnos/:id", handlers.HandleDeleteAlumno)
+	api.GET("/alumnos/:id/condiciones", handlers.HandleGetCondicionesPorAlumno)
+	api.PUT("/alumnos/:alumno_id/materias/:materia_id", handlers.HandleSetCondicionAlumno) 
+	api.GET("/alumnos/:id/progreso", handlers.HandleGetProgresoAlumno)
 
 	api.GET("/materias", handlers.HandleGetMaterias)
 	api.GET("/materias/:id", handlers.HandleGetMateriaByID)
@@ -62,6 +65,9 @@ func main() {
 	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
 	api.POST("/carreras/:carrera_id/materias/:materia_id", handlers.HandleAsociarMateriaACarrera)
 	api.DELETE("/carreras/:carrera_id/materias/:materia_id", handlers.HandleDesasociarMateriaDeCarrera)
+
+	api.GET("/condiciones", handlers.HandleGetCondiciones)
+	api.POST("/condiciones", handlers.HandlePostCondicion)
 
 	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }
