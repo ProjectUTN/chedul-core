@@ -30,7 +30,8 @@ reset:
   GOOSE_DRIVER=postgres GOOSE_DBSTRING={{GOOSE_DBSTRING}} goose -dir={{MIGRATION_PATH}} reset
 
 postgres:
-  ./scripts/spawn_postgres.sh
+  bash ./scripts/spawn_postgres.sh
+  
 
 kill-db:
   docker kill chedul-db

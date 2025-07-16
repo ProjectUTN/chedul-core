@@ -2,6 +2,7 @@ package logger
 
 import (
 	"chedul-core/util"
+	"os"
 
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -11,24 +12,41 @@ import (
 var Logger *zap.Logger
 
 func InitLogger() error {
-	var config zap.Config
-
+	var encoderCfg zapcore.EncoderConfig
 	if util.IsEnvProd() {
-		config = zap.NewProductionConfig()
-		config.DisableStacktrace = true
+		encoderCfg = zap.NewProductionEncoderConfig()
 	} else {
-		config = zap.NewDevelopmentConfig()
-		config.DisableStacktrace = true
-	}
+		encoderCfg = zap.NewDevelopmentEncoderConfig()
 
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+	}
+	encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
+
+	config := zap.Config{
+		Level:             zap.NewAtomicLevelAt(zap.DebugLevel),
+		Development:       true,
+		DisableCaller:     false,
+		DisableStacktrace: true,
+		Sampling:          nil,
+		Encoding:          "console",
+		EncoderConfig:     encoderCfg,
+		OutputPaths: []string{
+			"stderr",
+		},
+		ErrorOutputPaths: []string{
+			"stderr",
+		},
+		InitialFields: map[string]any{
+			"pid": os.Getpid(),
+		},
+	}
 
 	var err error
 	Logger, err = config.Build()
 
 	return err
+
 }
 
 func GetLogger() *zap.Logger {
