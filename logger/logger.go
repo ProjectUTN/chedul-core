@@ -4,14 +4,13 @@ import (
 	"chedul-core/util"
 	"os"
 
-	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
 var Logger *zap.Logger
 
-func InitLogger() error {
+func InitLogger() (*zap.Logger, error) {
 	var encoderCfg zapcore.EncoderConfig
 	if util.IsEnvProd() {
 		encoderCfg = zap.NewProductionEncoderConfig()
@@ -42,21 +41,9 @@ func InitLogger() error {
 		},
 	}
 
-	var err error
-	Logger, err = config.Build()
-
-	return err
-
+	return config.Build()
 }
 
 func GetLogger() *zap.Logger {
 	return Logger
-}
-
-func GetLoggerFromCtx(c echo.Context) *zap.Logger {
-	if logger, ok := c.Get("Logger").(*zap.Logger); ok {
-		return logger
-	}
-
-	return GetLogger()
 }

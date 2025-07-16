@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"chedul-core/db"
 	"chedul-core/domain"
-	"chedul-core/logger"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -41,15 +39,16 @@ func (self *UserRequest) Validate() map[string]string {
 }
 
 func HandleGetAlumnos(c echo.Context) error {
-	conn := db.GetDB()
-	ctx := c.Request().Context()
-	logger := logger.GetLoggerFromCtx(c)
+	ctx := c.(*AppContext)
+
+	conn := ctx.conn
+	logger := ctx.logger
 
 	logger.Info("Buscando todos los alumnos")
 
 	users := []Alumno{}
 
-	err := conn.NewSelect().Model(&users).Scan(ctx)
+	err := conn.NewSelect().Model(&users).Scan(ctx.Request().Context())
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.JSON(http.StatusNotFound, []Alumno{})
@@ -62,8 +61,8 @@ func HandleGetAlumnos(c echo.Context) error {
 }
 
 func HandleGetAlumno(c echo.Context) error {
-	conn := db.GetDB()
-	ctx := c.Request().Context()
+	ctx := c.(*AppContext)
+	conn := ctx.conn
 
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -72,7 +71,7 @@ func HandleGetAlumno(c echo.Context) error {
 	}
 
 	var user Alumno
-	err = conn.NewSelect().Model(&user).Where("id=?", id).Scan(ctx)
+	err = conn.NewSelect().Model(&user).Where("id=?", id).Scan(ctx.Request().Context())
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -85,8 +84,8 @@ func HandleGetAlumno(c echo.Context) error {
 }
 
 func HandlePostAlumno(c echo.Context) error {
-	conn := db.GetDB()
-	ctx := c.Request().Context()
+	ctx := c.(*AppContext)
+	conn := ctx.conn
 
 	var req UserRequest
 	if err := c.Bind(&req); err != nil {
@@ -98,7 +97,7 @@ func HandlePostAlumno(c echo.Context) error {
 	}
 
 	var carrera_id int64
-	if err := conn.NewRaw("select id from ? where nombre = ?", bun.Ident("carrera"), req.Carrera).Scan(ctx, &carrera_id); err != nil {
+	if err := conn.NewRaw("select id from ? where nombre = ?", bun.Ident("carrera"), req.Carrera).Scan(ctx.Request().Context(), &carrera_id); err != nil {
 		return err
 	}
 
@@ -110,7 +109,7 @@ func HandlePostAlumno(c echo.Context) error {
 
 	_, err := conn.NewInsert().
 		Model(&user).
-		Exec(ctx)
+		Exec(ctx.Request().Context())
 
 	if err != nil {
 		return err
@@ -120,8 +119,8 @@ func HandlePostAlumno(c echo.Context) error {
 }
 
 func HandlePutAlumno(c echo.Context) error {
-	conn := db.GetDB()
-	ctx := c.Request().Context()
+	ctx := c.(*AppContext)
+	conn := ctx.conn
 
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -142,7 +141,7 @@ func HandlePutAlumno(c echo.Context) error {
 	err = conn.NewSelect().
 		Model(&user).
 		Where("id = ?", id).
-		Scan(ctx)
+		Scan(ctx.Request().Context())
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -172,7 +171,7 @@ func HandlePutAlumno(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	_, err = updateQuery.Exec(ctx)
+	_, err = updateQuery.Exec(ctx.Request().Context())
 	if err != nil {
 		return err
 	}
@@ -182,8 +181,8 @@ func HandlePutAlumno(c echo.Context) error {
 }
 
 func HandleDeleteAlumno(c echo.Context) error {
-	conn := db.GetDB()
-	ctx := c.Request().Context()
+	ctx := c.(*AppContext)
+	conn := ctx.conn
 
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -195,7 +194,7 @@ func HandleDeleteAlumno(c echo.Context) error {
 	err = conn.NewSelect().
 		Model(&user).
 		Where("id = ?", id).
-		Scan(ctx)
+		Scan(ctx.Request().Context())
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -207,7 +206,7 @@ func HandleDeleteAlumno(c echo.Context) error {
 	_, err = conn.NewDelete().
 		Model((*Alumno)(nil)).
 		Where("id = ?", id).
-		Exec(ctx)
+		Exec(ctx.Request().Context())
 
 	if err != nil {
 		return err

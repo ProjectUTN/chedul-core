@@ -4,7 +4,7 @@ import (
 	"chedul-core/db"
 	"chedul-core/handlers"
 	"chedul-core/logger"
-	"fmt"
+	"log"
 	"os"
 
 	"github.com/labstack/echo/v4"
@@ -13,14 +13,16 @@ import (
 )
 
 func main() {
-	if err := logger.InitLogger(); err != nil {
-		fmt.Println("Error iniciando logger:", err)
-		os.Exit(1)
+	logger, err := logger.InitLogger()
+
+	if err != nil {
+		log.Fatal("Error iniciando logger:", err)
 	}
 
-	if _, err := db.InitDB(); err != nil {
-		logger.GetLogger().Error("Error al conectar con la DB", zap.Error(err))
-		os.Exit(1)
+	pg_pool, err := db.InitDB()
+
+	if err != nil {
+		logger.Fatal("Error al conectar con la DB", zap.Error(err))
 	}
 
 	api := echo.New()
@@ -35,6 +37,7 @@ func main() {
 
 	api.Use(middleware.Recover())
 	api.Use(handlers.TracingMiddleware("chedul-service"))
+	api.Use(handlers.AppContextMiddleware(pg_pool, logger))
 
 	api.GET("/alumnos", handlers.HandleGetAlumnos)
 	api.GET("/alumnos/:id", handlers.HandleGetAlumno)

@@ -29,7 +29,7 @@ func HttpErrorHandler(err error, c echo.Context) {
 		c.JSON(http.StatusInternalServerError, errResp)
 	}
 
-	logger.GetLoggerFromCtx(c).Error("HTTP API Error ",
+	logger.GetLogger().Error("HTTP API Error ",
 		zap.String("err", err.Error()),
 		zap.String("path", c.Request().URL.Path),
 	)
