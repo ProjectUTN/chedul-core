@@ -48,13 +48,24 @@ func main() {
 
 	api.GET("/materias", handlers.HandleGetMaterias)
 	api.GET("/materias/:id", handlers.HandleGetMateriaByID)
+	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
 	api.POST("/materias", handlers.HandlePostMateria)
 	api.PUT("/materias/:id", handlers.HandlePutMateria)
 	api.DELETE("/materias/:id", handlers.HandleDeleteMateria)
+	
 
 	api.GET("/cuatrimestres", handlers.HandleGetCuatrimestres)
 	api.POST("/cuatrimestres", handlers.HandlePostCuatrimestre)
 	api.DELETE("/cuatrimestres/:id", handlers.HandleDeleteCuatrimestre)
+
+	api.GET("/carreras", handlers.HandleGetCarreras)
+	api.POST("/carreras", handlers.HandlePostCarrera)
+	api.DELETE("/carreras/:id", handlers.HandleDeleteCarrera)
+
+
+	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
+	api.POST("/carreras/:carrera_id/materias/:materia_id", handlers.HandleAsociarMateriaACarrera)
+	api.DELETE("/carreras/:carrera_id/materias/:materia_id", handlers.HandleDesasociarMateriaDeCarrera)
 
 	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }

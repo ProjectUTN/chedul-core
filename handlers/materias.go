@@ -174,3 +174,30 @@ func HandleDeleteMateria(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Materia eliminada exitosamente"})
 }
+
+
+func HandleGetMateriasPorCarrera(c echo.Context) error {
+	ctx := c.(*AppContext)
+	conn := ctx.conn
+
+	idParam := c.Param("id")
+	carreraID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		return NewApiError(http.StatusBadRequest, fmt.Errorf("ID de carrera inválido"))
+	}
+
+	var materias []Materia
+	err = conn.NewSelect().
+		Model(&materias).
+		Join("JOIN materiasporcarrera AS mpc ON mpc.materia_id = materia.id").
+		Where("mpc.carrera_id = ?", carreraID).
+		Scan(ctx.Request().Context())
+
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+	}
+
+	return c.JSON(http.StatusOK, materias)
+}
