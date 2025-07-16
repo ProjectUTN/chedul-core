@@ -16,8 +16,8 @@ func InitLogger() (*zap.Logger, error) {
 		encoderCfg = zap.NewProductionEncoderConfig()
 	} else {
 		encoderCfg = zap.NewDevelopmentEncoderConfig()
-
 	}
+
 	encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
@@ -41,7 +41,10 @@ func InitLogger() (*zap.Logger, error) {
 		},
 	}
 
-	return config.Build()
+	var err error
+	Logger, err = config.Build()
+
+	return Logger, err
 }
 
 func GetLogger() *zap.Logger {
