@@ -49,6 +49,12 @@ func main() {
 	api.GET("/materias", handlers.HandleGetMaterias)
 	api.GET("/materias/:id", handlers.HandleGetMateriaByID)
 	api.POST("/materias", handlers.HandlePostMateria)
-	
+	api.PUT("/materias/:id", handlers.HandlePutMateria)
+	api.DELETE("/materias/:id", handlers.HandleDeleteMateria)
+
+	api.GET("/cuatrimestres", handlers.HandleGetCuatrimestres)
+	api.POST("/cuatrimestres", handlers.HandlePostCuatrimestre)
+	api.DELETE("/cuatrimestres/:id", handlers.HandleDeleteCuatrimestre)
+
 	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }

@@ -4,7 +4,7 @@ create table if not exists materia (
     id int generated always as identity primary key not null,
     nombre text not null unique,
     carga_horaria int not null,
-    correlativa_id int not null,
+    correlativa_id int,
     nivel int not null check(nivel between 1 and 5),
     area text not null,
     tipo text not null,
