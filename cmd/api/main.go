@@ -39,7 +39,6 @@ func main() {
 	api.HideBanner = true
 	api.HTTPErrorHandler = handlers.HttpErrorHandler
 
-	 
 	api.GET("/alumnos", handlers.HandleGetAlumnos)
 	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
 	api.POST("/alumnos", handlers.HandlePostAlumno)
@@ -52,7 +51,6 @@ func main() {
 	api.POST("/materias", handlers.HandlePostMateria)
 	api.PUT("/materias/:id", handlers.HandlePutMateria)
 	api.DELETE("/materias/:id", handlers.HandleDeleteMateria)
-	
 
 	api.GET("/cuatrimestres", handlers.HandleGetCuatrimestres)
 	api.POST("/cuatrimestres", handlers.HandlePostCuatrimestre)
@@ -61,8 +59,6 @@ func main() {
 	api.GET("/carreras", handlers.HandleGetCarreras)
 	api.POST("/carreras", handlers.HandlePostCarrera)
 	api.DELETE("/carreras/:id", handlers.HandleDeleteCarrera)
-
-
 	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
 	api.POST("/carreras/:carrera_id/materias/:materia_id", handlers.HandleAsociarMateriaACarrera)
 	api.DELETE("/carreras/:carrera_id/materias/:materia_id", handlers.HandleDesasociarMateriaDeCarrera)
