@@ -8,7 +8,7 @@ create table if not exists materia (
     nivel int not null check(nivel between 1 and 5),
     area text not null,
     tipo text not null,
-    cuatrimestre_id int not null,
+    cuatrimestre_id int,
     horas float,
     bloque text not null,
     programa text not null

@@ -18,13 +18,13 @@ type Alumno struct {
 	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
 }
 
-type UserRequest struct {
+type AlumnoRequest struct {
 	Nombre  string `json:"nombre"`
 	Email   string `json:"email"`
 	Carrera string `json:"carrera"`
 }
 
-func (self *UserRequest) Validate() map[string]string {
+func (self *AlumnoRequest) Validate() map[string]string {
 	errors := make(map[string]string)
 
 	if _, err := domain.NewAlumnoName(self.Nombre); err != nil {
@@ -87,7 +87,7 @@ func HandlePostAlumno(c echo.Context) error {
 	ctx := c.(*AppContext)
 	conn := ctx.conn
 
-	var req UserRequest
+	var req AlumnoRequest
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
 	}
@@ -128,7 +128,7 @@ func HandlePutAlumno(c echo.Context) error {
 		return err
 	}
 
-	var req UserRequest
+	var req AlumnoRequest
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
 	}

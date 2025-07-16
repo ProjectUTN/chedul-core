@@ -39,7 +39,6 @@ func main() {
 	api.HideBanner = true
 	api.HTTPErrorHandler = handlers.HttpErrorHandler
 
-	 
 	api.GET("/alumnos", handlers.HandleGetAlumnos)
 	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
 	api.POST("/alumnos", handlers.HandlePostAlumno)
@@ -49,6 +48,6 @@ func main() {
 	api.GET("/materias", handlers.HandleGetMaterias)
 	api.GET("/materias/:id", handlers.HandleGetMateriaByID)
 	api.POST("/materias", handlers.HandlePostMateria)
-	
+
 	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
 }
