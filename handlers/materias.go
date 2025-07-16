@@ -10,7 +10,6 @@ import (
 	"github.com/uptrace/bun"
 )
 
-
 type Materia struct {
 	bun.BaseModel  `bun:"table:materia"`
 	ID             int64   `json:"id" bun:"id,pk,autoincrement"`
@@ -40,6 +39,23 @@ type MateriaRequest struct {
 	Programa       string  `json:"programa"`
 }
 
+type MateriaDetailResponse struct {
+	bun.BaseModel  `bun:"table:materia"` 
+	ID             int64   `json:"id"`
+	Nombre         string  `json:"nombre"`
+	CargaHoraria   int     `json:"carga_horaria"`
+	Nivel          int     `json:"nivel"`
+	Area           string  `json:"area"`
+	Tipo           string  `json:"tipo"`
+	Horas          float64 `json:"horas"`
+	Bloque         string  `json:"bloque"`
+	Programa       string  `json:"programa"`
+
+	CuatrimestreID int64  `json:"-" bun:"cuatrimestre_id"`
+	CorrelativaID  *int64 `json:"-" bun:"correlativa_id"`
+	Cuatrimestre   *Cuatrimestre `json:"cuatrimestre,omitempty" bun:"rel:belongs-to,join:cuatrimestre_id=id"`
+	Correlativa    *Materia      `json:"correlativa,omitempty"   bun:"rel:belongs-to,join:correlativa_id=id"`
+}
 
 
 func HandleGetMaterias(c echo.Context) error {
@@ -56,6 +72,7 @@ func HandleGetMaterias(c echo.Context) error {
 	return c.JSON(http.StatusOK, materias)
 }
 
+
 func HandleGetMateriaByID(c echo.Context) error {
 	ctx := c.(*AppContext)
 	conn := ctx.conn
@@ -64,8 +81,15 @@ func HandleGetMateriaByID(c echo.Context) error {
 	if err != nil {
 		return NewApiError(http.StatusBadRequest, fmt.Errorf("ID inválido"))
 	}
-	var materia Materia
-	err = conn.NewSelect().Model(&materia).Where("id=?", id).Scan(ctx.Request().Context())
+
+	var materia MateriaDetailResponse
+	err = conn.NewSelect().
+		Model(&materia).
+		Where("?TableAlias.id = ?", id).
+		Relation("Cuatrimestre").
+		Relation("Correlativa").
+		Scan(ctx.Request().Context())
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return NewApiError(http.StatusNotFound, fmt.Errorf("Materia no encontrada"))
@@ -74,7 +98,6 @@ func HandleGetMateriaByID(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, materia)
 }
-
 
 func HandlePostMateria(c echo.Context) error {
 	ctx := c.(*AppContext)
@@ -106,8 +129,6 @@ func HandlePostMateria(c echo.Context) error {
 	return c.JSON(http.StatusCreated, materia)
 }
 
-
-
 func HandlePutMateria(c echo.Context) error {
 	ctx := c.(*AppContext)
 	conn := ctx.conn
@@ -133,7 +154,7 @@ func HandlePutMateria(c echo.Context) error {
 
 	materia.Nombre = req.Nombre
 	materia.CargaHoraria = req.CargaHoraria
-	materia.CorrelativaID = req.CorrelativaID // Se actualiza el puntero
+	materia.CorrelativaID = req.CorrelativaID
 	materia.Nivel = req.Nivel
 	materia.Area = req.Area
 	materia.Tipo = req.Tipo
@@ -149,8 +170,6 @@ func HandlePutMateria(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, materia)
 }
-
-
 
 func HandleDeleteMateria(c echo.Context) error {
 	ctx := c.(*AppContext)
@@ -174,7 +193,6 @@ func HandleDeleteMateria(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Materia eliminada exitosamente"})
 }
-
 
 func HandleGetMateriasPorCarrera(c echo.Context) error {
 	ctx := c.(*AppContext)
