@@ -20,8 +20,3 @@ type MateriaRepository interface {
 	GetAll(ctx context.Context) ([]Materia, error)
 	GetByID(ctx context.Context, id int64) (*Materia, error)
 }
-
-type MateriaService interface {
-	GetAll(ctx context.Context) ([]Materia, error)
-	GetByID(ctx context.Context, id int64) (*Materia, error)
-}

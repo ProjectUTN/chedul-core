@@ -13,7 +13,7 @@ type CondicionHandler struct {
 	logger *zap.Logger
 }
 
-func NewCondicionHandler(repo domain.CondicionService, logger *zap.Logger) *CondicionHandler {
+func NewCondicionHandler(repo domain.CondicionRepository, logger *zap.Logger) *CondicionHandler {
 	return &CondicionHandler{
 		repo:   repo,
 		logger: logger,
