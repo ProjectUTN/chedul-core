@@ -1,7 +1,7 @@
 package db
 
 import (
-	"chedul-core/util"
+	"chedul-core/pkg/util"
 	"context"
 	"database/sql"
 	"fmt"
@@ -11,17 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bundebug"
 )
 
-var (
-	db   *bun.DB
-	once sync.Once
-)
+var once sync.Once
 
 type ConnectionConfig struct {
 	MaxOpenConns    int
@@ -39,11 +35,12 @@ func DefaultConnectionConfig() *ConnectionConfig {
 	}
 }
 
-func InitDB() (*bun.DB, error) {
+func Open(dbUrl string) (*bun.DB, error) {
 	var err error
 
+	var db *bun.DB
 	once.Do(func() {
-		db, err = createConnection()
+		db, err = createConnection(dbUrl)
 	})
 
 	if err != nil {
@@ -57,22 +54,9 @@ func InitDB() (*bun.DB, error) {
 	return db, err
 }
 
-func createConnection() (*bun.DB, error) {
-	if err := godotenv.Load(); err != nil {
-		return nil, fmt.Errorf("No se encontró el '.env'")
-	}
+func createConnection(dbUrl string) (*bun.DB, error) {
 
-	dbConfig := getDatabaseConfig()
-
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbConfig.User,
-		dbConfig.Password,
-		dbConfig.Host,
-		dbConfig.Port,
-		dbConfig.Database,
-	)
-
-	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbUrl)))
 
 	poolConfig := getConnectionPoolConfig()
 	configureConnectionPool(sqlDB, poolConfig)
@@ -94,24 +78,6 @@ func createConnection() (*bun.DB, error) {
 	)
 
 	return bunDB, nil
-}
-
-type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Database string
-}
-
-func getDatabaseConfig() *DatabaseConfig {
-	return &DatabaseConfig{
-		Host:     getEnvOrDefault("DB_HOST", "localhost"),
-		Port:     getEnvOrDefault("DB_PORT", "5432"),
-		User:     getEnvOrDefault("DB_USER", "chedul"),
-		Password: getEnvOrDefault("DB_PASSWORD", ""),
-		Database: getEnvOrDefault("DB_NAME", "chedul"),
-	}
 }
 
 func getConnectionPoolConfig() *ConnectionConfig {
@@ -151,22 +117,15 @@ func configureConnectionPool(sqlDB *sql.DB, config *ConnectionConfig) {
 	sqlDB.SetConnMaxIdleTime(config.ConnMaxIdleTime)
 }
 
-func GetDB() *bun.DB {
-	if db == nil {
-		log.Fatal("La base de datos no está inicializada. Llama a InitDB() primero.")
-	}
-	return db
-}
-
-func GetDBStats() sql.DBStats {
+func GetDBStats(db *bun.DB) sql.DBStats {
 	if db == nil {
 		return sql.DBStats{}
 	}
 	return db.DB.Stats()
 }
 
-func PrintPoolStats() {
-	stats := GetDBStats()
+func PrintPoolStats(db *bun.DB) {
+	stats := GetDBStats(db)
 
 	log.Printf("Estadísticas del pool de la base de datos:")
 	log.Printf("  Conexiones abiertas: %d", stats.OpenConnections)
@@ -178,7 +137,7 @@ func PrintPoolStats() {
 	log.Printf("  Cerradas por tiempo de vida: %d", stats.MaxLifetimeClosed)
 }
 
-func HealthCheck(ctx context.Context) error {
+func HealthCheck(db *bun.DB, ctx context.Context) error {
 	if db == nil {
 		return fmt.Errorf("la base de datos no está inicializada")
 	}
@@ -187,7 +146,7 @@ func HealthCheck(ctx context.Context) error {
 		return fmt.Errorf("falló el ping a la base de datos: %w", err)
 	}
 
-	stats := GetDBStats()
+	stats := GetDBStats(db)
 	if stats.OpenConnections == 0 {
 		return fmt.Errorf("no hay conexiones disponibles a la base de datos")
 	}
@@ -195,7 +154,7 @@ func HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func CloseDB() error {
+func CloseDB(db *bun.DB) error {
 	if db != nil {
 		return db.Close()
 	}

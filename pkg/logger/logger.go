@@ -1,18 +1,16 @@
 package logger
 
 import (
-	"chedul-core/util"
+	"chedul-core/pkg/config"
 	"os"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-var Logger *zap.Logger
-
-func InitLogger() (*zap.Logger, error) {
+func New(cfg *config.AppConfig, logLevel zapcore.Level) (*zap.Logger, error) {
 	var encoderCfg zapcore.EncoderConfig
-	if util.IsEnvProd() {
+	if cfg.IsProd() {
 		encoderCfg = zap.NewProductionEncoderConfig()
 	} else {
 		encoderCfg = zap.NewDevelopmentEncoderConfig()
@@ -23,7 +21,7 @@ func InitLogger() (*zap.Logger, error) {
 	encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
 
 	config := zap.Config{
-		Level:             zap.NewAtomicLevelAt(zap.DebugLevel),
+		Level:             zap.NewAtomicLevelAt(logLevel),
 		Development:       true,
 		DisableCaller:     false,
 		DisableStacktrace: true,
@@ -41,12 +39,5 @@ func InitLogger() (*zap.Logger, error) {
 		},
 	}
 
-	var err error
-	Logger, err = config.Build()
-
-	return Logger, err
-}
-
-func GetLogger() *zap.Logger {
-	return Logger
+	return config.Build()
 }

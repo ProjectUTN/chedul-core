@@ -1,18 +1,17 @@
-package handlers
+package server
 
 import (
-	"chedul-core/logger"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
 )
 
-func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
+func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			start := time.Now()
-			logger := logger.GetLogger()
 
 			requestLogger := logger.With(
 				zap.String("method", c.Request().Method),
@@ -50,4 +49,21 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 
 		}
 	}
+}
+
+func CORSMiddleware() echo.MiddlewareFunc {
+	return middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{"*"},
+		AllowMethods: []string{"*"},
+	})
+}
+
+func RecoverMiddleware(logger *zap.Logger) echo.MiddlewareFunc {
+	return middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
+			logger.Error("panic recovered", zap.Error(err), zap.ByteString("stack", stack))
+			return nil
+		},
+	})
 }

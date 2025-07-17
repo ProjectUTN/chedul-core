@@ -1,0 +1,12 @@
+# Ejemplo
+env: development
+server:
+  port: 8080
+
+database:
+  host: 127.0.0.1
+  port: 5432
+  user: chedul
+  password: chedul
+  name: chedul-db
+  

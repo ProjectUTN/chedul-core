@@ -1,67 +1,41 @@
 package main
 
 import (
-	"chedul-core/db"
-	"chedul-core/handlers"
-	"chedul-core/logger"
+	"chedul-core/internals/server"
+	"chedul-core/pkg/config"
+	"chedul-core/pkg/db"
+	"chedul-core/pkg/logger"
 	"log"
-	"os"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
 
-func main() {
-	logger, err := logger.InitLogger()
+type App struct {
+	conn   *bun.DB
+	logger *zap.Logger
+}
 
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal("Error leyendo la configuracion")
+	}
+
+	logger, err := logger.New(cfg, zap.DebugLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
 	}
 
-	pg_pool, err := db.InitDB()
-
+	db, err := db.Open(cfg.DatabaseUrl())
 	if err != nil {
 		logger.Fatal("Error al conectar con la DB", zap.Error(err))
 	}
+	defer db.Close()
 
-	api := echo.New()
-	api.Use(handlers.AppContextMiddleware(pg_pool, logger))
-	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowHeaders: []string{"*"},
-		AllowMethods: []string{"*"},
-	}))
+	server := server.New(cfg, db, logger)
 
-	api.Use(middleware.Recover())
-	api.Use(handlers.TracingMiddleware("chedul-service"))
-
-	api.HideBanner = true
-	api.HTTPErrorHandler = handlers.HttpErrorHandler
-
-	api.GET("/alumnos", handlers.HandleGetAlumnos)
-	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
-	api.POST("/alumnos", handlers.HandlePostAlumno)
-	api.PUT("/alumnos", handlers.HandlePutAlumno)
-	api.DELETE("/alumnos/:id", handlers.HandleDeleteAlumno)
-
-	api.GET("/materias", handlers.HandleGetMaterias)
-	api.GET("/materias/:id", handlers.HandleGetMateriaByID)
-	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
-	api.POST("/materias", handlers.HandlePostMateria)
-	api.PUT("/materias/:id", handlers.HandlePutMateria)
-	api.DELETE("/materias/:id", handlers.HandleDeleteMateria)
-
-	api.GET("/cuatrimestres", handlers.HandleGetCuatrimestres)
-	api.POST("/cuatrimestres", handlers.HandlePostCuatrimestre)
-	api.DELETE("/cuatrimestres/:id", handlers.HandleDeleteCuatrimestre)
-
-	api.GET("/carreras", handlers.HandleGetCarreras)
-	api.POST("/carreras", handlers.HandlePostCarrera)
-	api.DELETE("/carreras/:id", handlers.HandleDeleteCarrera)
-	api.GET("/carreras/:id/materias", handlers.HandleGetMateriasPorCarrera)
-	api.POST("/carreras/:carrera_id/materias/:materia_id", handlers.HandleAsociarMateriaACarrera)
-	api.DELETE("/carreras/:carrera_id/materias/:materia_id", handlers.HandleDesasociarMateriaDeCarrera)
-
-	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
+	if err := server.Start(); err != nil {
+		log.Fatal("Fallo al iniciar el servidor:", err)
+	}
 }

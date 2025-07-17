@@ -6,7 +6,7 @@ _default:
 
 
 api: build
-  LISTEN_ADDR=127.0.0.1:8080 ./bin/chedul-backend 
+  LISTEN_ADDR=8080 ./bin/chedul-backend 
 
 watch:
     watchexec -r -e go -- just api
