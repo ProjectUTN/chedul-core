@@ -10,21 +10,21 @@ import (
 )
 
 type MateriaHandler struct {
-	service domain.MateriaService
-	logger  *zap.Logger
+	repo   domain.MateriaRepository
+	logger *zap.Logger
 }
 
-func NewMateriaHandler(service domain.MateriaService, logger *zap.Logger) *MateriaHandler {
+func NewMateriaHandler(repo domain.MateriaRepository, logger *zap.Logger) *MateriaHandler {
 	return &MateriaHandler{
-		service: service,
-		logger:  logger,
+		repo:   repo,
+		logger: logger,
 	}
 }
 
 func (h *MateriaHandler) GetAll(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	materias, err := h.service.GetAll(ctx)
+	materias, err := h.repo.GetAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (h *MateriaHandler) GetByID(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	materia, err := h.service.GetByID(ctx, id)
+	materia, err := h.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}

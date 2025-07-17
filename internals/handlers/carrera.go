@@ -10,21 +10,21 @@ import (
 )
 
 type CarreraHandler struct {
-	service domain.CarreraService
-	logger  *zap.Logger
+	repo   domain.CarreraRepository
+	logger *zap.Logger
 }
 
-func NewCarreraHandler(service domain.CarreraService, logger *zap.Logger) *CarreraHandler {
+func NewCarreraHandler(repo domain.CarreraRepository, logger *zap.Logger) *CarreraHandler {
 	return &CarreraHandler{
-		service: service,
-		logger:  logger,
+		repo:   repo,
+		logger: logger,
 	}
 }
 
 func (h *CarreraHandler) GetAll(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	carreras, err := h.service.GetAll(ctx)
+	carreras, err := h.repo.GetAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (h *CarreraHandler) GetByID(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	carrera, err := h.service.GetByID(ctx, id)
+	carrera, err := h.repo.GetByID(ctx, id)
 	if err != nil {
 
 		h.logger.Error("failed to get carrera", zap.Error(err), zap.Int64("id", id))

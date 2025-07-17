@@ -3,7 +3,6 @@ package server
 import (
 	"chedul-core/internals/handlers"
 	"chedul-core/internals/repositories"
-	"chedul-core/internals/service"
 	"chedul-core/pkg/config"
 	"context"
 	"fmt"
@@ -86,14 +85,15 @@ func (s *Server) setupRoutes() {
 	alumnoRepo := repositories.NewAlumnoRepository(s.db)
 	carreraRepo := repositories.NewCarreraRepository(s.db)
 	materiaRepo := repositories.NewMateriaRepository(s.db)
+	condicionRepo := repositories.NewCondicionRepository(s.db)
+	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
 
-	alumnoService := service.NewAlumnoService(alumnoRepo, carreraRepo)
-	carreraService := service.NewCarreraService(carreraRepo)
-	materiaService := service.NewMateriaService(materiaRepo)
-
-	alumnoHandler := handlers.NewAlumnoHandler(alumnoService, s.logger)
-	carreraHandler := handlers.NewCarreraHandler(carreraService, s.logger)
-	materiaHandler := handlers.NewMateriaHandler(materiaService, s.logger)
+	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger)
+	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
+	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.logger)
+	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.logger)
+	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandle(condicionAlumnoRepo, s.logger)
+	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, condicionAlumnoRepo, condicionRepo, s.db)
 
 	api := s.echo.Group("/api/v1")
 
@@ -103,6 +103,7 @@ func (s *Server) setupRoutes() {
 	alumnos.POST("", alumnoHandler.Create)
 	alumnos.PUT("/:id", alumnoHandler.Update)
 	alumnos.DELETE("/:id", alumnoHandler.Delete)
+	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)
 
 	carreras := api.Group("/carreras")
 	carreras.GET("", carreraHandler.GetAll)
@@ -111,4 +112,11 @@ func (s *Server) setupRoutes() {
 	materias := api.Group("/materias")
 	materias.GET("", materiaHandler.GetAll)
 	materias.GET("/:id", materiaHandler.GetByID)
+
+	condicion := api.Group("/condicion")
+	condicion.GET("", condicionHandler.GetAll)
+
+	condicion_alumno := api.Group("/condicion_alumno")
+	condicion_alumno.GET("/:id", condicionAlumnoHandler.GetCondicionPorAlumno)
+	condicion_alumno.POST("", condicionAlumnoHandler.SetCondicionAlumno)
 }

@@ -5,12 +5,12 @@ import "context"
 type Materia struct {
 	ID             int64   `json:"id"`
 	Nombre         string  `json:"nombre"`
-	CargaHoraria   int     `json:"carga_horaria"`
-	CorrelativaID  int     `json:"correlativa_id"`
-	Nivel          int     `json:"nivel"`
+	CargaHoraria   int64   `json:"carga_horaria"`
+	CorrelativaID  *int64  `json:"correlativa_id"`
+	Nivel          int64   `json:"nivel"`
 	Area           string  `json:"area"`
 	Tipo           string  `json:"tipo"`
-	CuatrimestreID int     `json:"cuatrimestre_id"`
+	CuatrimestreID int64   `json:"cuatrimestre_id"`
 	Horas          float64 `json:"horas"`
 	Bloque         string  `json:"bloque"`
 	Programa       string  `json:"programa"`

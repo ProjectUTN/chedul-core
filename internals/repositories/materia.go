@@ -11,12 +11,12 @@ type MateriaModel struct {
 	bun.BaseModel  `bun:"table:materia"`
 	ID             int64   `json:"id" bun:"id,pk,autoincrement"`
 	Nombre         string  `json:"nombre" bun:"nombre,notnull"`
-	CargaHoraria   int     `json:"carga_horaria" bun:"carga_horaria,notnull"`
-	CorrelativaID  int     `json:"correlativa_id,omitempty" bun:"correlativa_id"`
-	Nivel          int     `json:"nivel" bun:"nivel,notnull"`
+	CargaHoraria   int64   `json:"carga_horaria" bun:"carga_horaria,notnull"`
+	CorrelativaID  *int64  `json:"correlativa_id,omitempty" bun:"correlativa_id"`
+	Nivel          int64   `json:"nivel" bun:"nivel,notnull"`
 	Area           string  `json:"area" bun:"area,notnull"`
 	Tipo           string  `json:"tipo" bun:"tipo,notnull"`
-	CuatrimestreID int     `json:"cuatrimestre_id" bun:"cuatrimestre_id,notnull"`
+	CuatrimestreID int64   `json:"cuatrimestre_id" bun:"cuatrimestre_id,notnull"`
 	Horas          float64 `json:"horas" bun:"horas"`
 	Bloque         string  `json:"bloque" bun:"bloque,notnull"`
 	Programa       string  `json:"programa" bun:"programa,notnull"`

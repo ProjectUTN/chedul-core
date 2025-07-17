@@ -33,6 +33,10 @@ func (self *AlumnoRequest) Validate() map[string]string {
 		errors["email"] = err.Error()
 	}
 
+	if self.Carrera == "" {
+		errors["carrera"] = fmt.Sprintf("'%v' no es una carrera valida", self.Carrera)
+	}
+
 	return errors
 }
 

@@ -4,27 +4,30 @@ import (
 	"chedul-core/internals/domain"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 )
 
 type AlumnoHandler struct {
-	service domain.AlumnoService
-	logger  *zap.Logger
+	alumnoRepo  domain.AlumnoRepository
+	carreraRepo domain.CarreraRepository
+	logger      *zap.Logger
 }
 
-func NewAlumnoHandler(service domain.AlumnoService, logger *zap.Logger) *AlumnoHandler {
+func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger) *AlumnoHandler {
 	return &AlumnoHandler{
-		service: service,
-		logger:  logger,
+		alumnoRepo:  alumnoRepo,
+		logger:      logger,
+		carreraRepo: carreraRepo,
 	}
 }
 
 func (h *AlumnoHandler) GetAll(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	alumnos, err := h.service.GetAll(ctx)
+	alumnos, err := h.alumnoRepo.GetAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -40,7 +43,7 @@ func (h *AlumnoHandler) GetByID(c echo.Context) error {
 		return err
 	}
 
-	alumno, err := h.service.GetByID(ctx, id)
+	alumno, err := h.alumnoRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -56,8 +59,28 @@ func (h *AlumnoHandler) Create(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	alumno, err := h.service.Create(ctx, req)
+	if errors := req.Validate(); len(errors) > 0 {
+		return InvalidRequestData(errors)
+	}
+
+	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
+		// TODO: Cambiar el error
+		return InvalidJSON()
+	}
+
+	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {
+		// TODO: Cambiar el error
+		return InvalidJSON()
+	}
+
+	alumno := &domain.Alumno{
+		Nombre:  strings.TrimSpace(req.Nombre),
+		Email:   strings.ToLower(strings.TrimSpace(req.Email)),
+		Carrera: carrera.ID,
+	}
+
+	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
 		return err
 	}
 
@@ -77,8 +100,30 @@ func (h *AlumnoHandler) Update(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	alumno, err := h.service.Update(ctx, id, req)
+	if errors := req.Validate(); len(errors) > 0 {
+		return InvalidRequestData(errors)
+	}
+
+	alumno, err := h.alumnoRepo.GetByID(ctx, id)
 	if err != nil {
+		return err
+	}
+
+	existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email)
+	if existing != nil && existing.ID != id {
+		// TODO: Mejorar el error
+		return InvalidJSON()
+	}
+	alumno.Email = req.Email
+
+	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
+	if err != nil {
+		// TODO: mejorar el error
+		return InvalidJSON()
+	}
+	alumno.Carrera = carrera.ID
+
+	if err := h.alumnoRepo.Update(ctx, alumno); err != nil {
 		return err
 	}
 
@@ -93,7 +138,7 @@ func (h *AlumnoHandler) Delete(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	if err := h.service.Delete(ctx, id); err != nil {
+	if err := h.alumnoRepo.Delete(ctx, id); err != nil {
 		h.logger.Error("failed to delete alumno", zap.Error(err), zap.Int64("id", id))
 		return err
 	}
