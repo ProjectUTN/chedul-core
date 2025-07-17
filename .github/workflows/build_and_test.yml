@@ -15,7 +15,9 @@ concurrency:
 
 jobs:
   build:
+
     runs-on: blacksmith-2vcpu-ubuntu-2404    
+
     name: build_and_test
 
     steps:
