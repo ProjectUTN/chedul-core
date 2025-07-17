@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"chedul-core/internals/domain"
+	"chedul-core/pkg/config"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -14,6 +16,7 @@ type AlumnoHandler struct {
 	alumnoRepo  domain.AlumnoRepository
 	carreraRepo domain.CarreraRepository
 	logger      *zap.Logger
+	appConfig   *config.AppConfig 
 }
 
 func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger) *AlumnoHandler {
@@ -101,12 +104,12 @@ func  (h *AlumnoHandler) SignUp(c echo.Context) error {
 	}
 
 	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "El email ya está registrado"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
 	}
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Carrera no válida"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
 	}
 
 	hashedPassword, err := HashPassword(req.Password)
@@ -126,6 +129,42 @@ func  (h *AlumnoHandler) SignUp(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, alumno)
+
+}
+
+func (h *AlumnoHandler) LogIn(c echo.Context) error {
+	
+	ctx := c.Request().Context()
+	var req domain.LoginRequest
+
+	if err := c.Bind(&req); err != nil {
+		return InvalidJSON()
+	}
+
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	alumno, err := h.alumnoRepo.GetByEmail(ctx, email)
+	if err != nil || alumno == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
+	}
+
+	if !CheckPassword(req.Password, alumno.Password) {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
+	}
+
+	token, err := GenerateJWT(alumno.ID, []byte(os.Getenv("JWTSECRET")))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token": token,
+		"user": map[string]interface{}{
+			"id":    alumno.ID,
+			"nombre": alumno.Nombre,
+			"email": alumno.Email,
+		},
+	})
 
 }
 

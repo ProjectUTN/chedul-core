@@ -42,6 +42,7 @@ func Load() (*AppConfig, error) {
 		return nil, fmt.Errorf("La variable 'env' no es aceptada: %v", config.Env)
 	}
 
+
 	return &config, nil
 
 }

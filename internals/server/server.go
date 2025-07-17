@@ -99,6 +99,7 @@ func (s *Server) setupRoutes() {
 	api := s.echo.Group("/api/v1")
 
 	api.POST("/signup", alumnoHandler.SignUp)
+	api.POST("/login", alumnoHandler.LogIn)
 
 
 	alumnos := api.Group("/alumnos")
