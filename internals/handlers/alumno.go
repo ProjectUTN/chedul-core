@@ -58,6 +58,7 @@ func (h *AlumnoHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
 	}
+	
 
 	if errors := req.Validate(); len(errors) > 0 {
 		return InvalidRequestData(errors)
@@ -85,6 +86,47 @@ func (h *AlumnoHandler) Create(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, alumno)
+}
+
+func  (h *AlumnoHandler) SignUp(c echo.Context) error {
+	ctx := c.Request().Context()
+	var req domain.SignUpRequest
+
+	if err := c.Bind(&req); err != nil {
+		return InvalidJSON()
+	}
+
+	if errors := req.Validate(); len(errors) > 0 {
+		return InvalidRequestData(errors)
+	}
+
+	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "El email ya está registrado"})
+	}
+
+	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Carrera no válida"})
+	}
+
+	hashedPassword, err := HashPassword(req.Password)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error al encriptar la contraseña"})
+	}
+
+	alumno := &domain.Alumno{
+		Nombre:   req.Nombre,
+		Email:    strings.ToLower(req.Email),
+		Carrera:  carrera.ID,
+		Password: hashedPassword,
+	}
+
+	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusCreated, alumno)
+
 }
 
 func (h *AlumnoHandler) Update(c echo.Context) error {
@@ -145,3 +187,4 @@ func (h *AlumnoHandler) Delete(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, "Alumno deleted successfully")
 }
+

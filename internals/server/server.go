@@ -87,6 +87,7 @@ func (s *Server) setupRoutes() {
 	materiaRepo := repositories.NewMateriaRepository(s.db)
 	condicionRepo := repositories.NewCondicionRepository(s.db)
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
+	
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
@@ -97,6 +98,9 @@ func (s *Server) setupRoutes() {
 
 	api := s.echo.Group("/api/v1")
 
+	api.POST("/signup", alumnoHandler.SignUp)
+
+
 	alumnos := api.Group("/alumnos")
 	alumnos.GET("", alumnoHandler.GetAll)
 	alumnos.GET("/:id", alumnoHandler.GetByID)
@@ -104,6 +108,7 @@ func (s *Server) setupRoutes() {
 	alumnos.PUT("/:id", alumnoHandler.Update)
 	alumnos.DELETE("/:id", alumnoHandler.Delete)
 	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)
+
 
 	carreras := api.Group("/carreras")
 	carreras.GET("", carreraHandler.GetAll)
