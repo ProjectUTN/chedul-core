@@ -1,18 +1,17 @@
-package handlers
+package server
 
 import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
+func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			start := time.Now()
-			logger := initLogger()
 
 			requestLogger := logger.With(
 				zap.String("method", c.Request().Method),
@@ -21,13 +20,20 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 			)
 
 			c.Set("Logger", requestLogger)
-
 			requestLogger.Info("Request started")
+
 			err := next(c)
 			duration := time.Since(start)
 
+			status := c.Response().Status
+			if err != nil {
+				if httpErr, ok := err.(*echo.HTTPError); ok {
+					status = httpErr.Code
+				}
+			}
+
 			logFields := []zap.Field{
-				zap.Int("status", c.Response().Status),
+				zap.Int("status", status),
 				zap.Duration("duration", duration),
 				zap.Int64("response_size", c.Response().Size),
 			}
@@ -45,12 +51,19 @@ func TracingMiddleware(serviceName string) echo.MiddlewareFunc {
 	}
 }
 
-func initLogger() *zap.Logger {
-	config := zap.NewDevelopmentConfig()
-	config.EncoderConfig.TimeKey = "timestamp"
-	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+func CORSMiddleware() echo.MiddlewareFunc {
+	return middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{"*"},
+		AllowMethods: []string{"*"},
+	})
+}
 
-	logger, _ := config.Build()
-	return logger
+func RecoverMiddleware(logger *zap.Logger) echo.MiddlewareFunc {
+	return middleware.RecoverWithConfig(middleware.RecoverConfig{
+		LogErrorFunc: func(c echo.Context, err error, stack []byte) error {
+			logger.Error("panic recovered", zap.Error(err), zap.ByteString("stack", stack))
+			return nil
+		},
+	})
 }

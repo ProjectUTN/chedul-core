@@ -6,7 +6,10 @@ _default:
 
 
 api: build
-  LISTEN_ADDR=127.0.0.1:8080 ./bin/chedul-backend 
+  LISTEN_ADDR=8080 ./bin/chedul-backend 
+
+watch:
+    watchexec -r -e go -- just api
 
 build:
   go build -o bin/chedul-backend cmd/api/main.go
@@ -27,7 +30,11 @@ reset:
   GOOSE_DRIVER=postgres GOOSE_DBSTRING={{GOOSE_DBSTRING}} goose -dir={{MIGRATION_PATH}} reset
 
 postgres:
-  ./scripts/spawn_postgres.sh
+  bash ./scripts/spawn_postgres.sh
+  
+
+kill-db:
+  docker kill chedul-db
 
 test dir="...":
   go test -v -cover ./{{dir}}

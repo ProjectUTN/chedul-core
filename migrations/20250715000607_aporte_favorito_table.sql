@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists aporte_alumno(
+create table if not exists aportes_favoritos(
     id int generated always as identity primary key not null,
     alumno_id int not null references alumno(id) on delete cascade,
     aporte_id int not null references aporte(id) on delete cascade,
@@ -11,5 +11,5 @@ create table if not exists aporte_alumno(
 
 -- +goose Down
 -- +goose StatementBegin
-drop table aporte_alumno;
+drop table aportes_favoritos;
 -- +goose StatementEnd

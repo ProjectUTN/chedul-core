@@ -1,38 +1,42 @@
 package main
 
 import (
-	"chedul-core/db"
-	"chedul-core/handlers"
-	"fmt"
-	"os"
+	"chedul-core/internals/server"
+	"chedul-core/pkg/config"
+	"chedul-core/pkg/db"
+	"chedul-core/pkg/logger"
+	"log"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/uptrace/bun"
+	"go.uber.org/zap"
 )
 
-func main() {
-	_, err := db.InitDB()
+type App struct {
+	conn   *bun.DB
+	logger *zap.Logger
+}
 
+func main() {
+	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println("Error al conectar con la DB", err)
+		log.Fatal("Error leyendo la configuracion")
 	}
 
-	api := echo.New()
-	api.HideBanner = true
-	api.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowHeaders: []string{"*"},
-		AllowMethods: []string{"*"},
-	}))
+	logger, err := logger.New(cfg, zap.DebugLevel)
+	if err != nil {
+		log.Fatal("Error iniciando logger:", err)
+	}
 
-	api.Use(middleware.Recover())
-	api.Use(handlers.TracingMiddleware("chedul-service"))
+	db, err := db.Open(cfg.DatabaseUrl())
+	if err != nil {
+		logger.Fatal("Error al conectar con la DB", zap.Error(err))
+	}
+	defer db.Close()
 
-	api.GET("/alumnos", handlers.HandleGetAlumnos)
-	api.GET("/alumnos/:id", handlers.HandleGetAlumno)
-	api.POST("/alumnos", handlers.HandlePostAlumno)
-	api.PUT("/alumnos", handlers.HandlePutAlumno)
-	api.DELETE("/alumnos/:id", handlers.HandleDeleteAlumno)
+	server := server.New(cfg, db, logger)
 
-	api.Logger.Fatal(api.Start(os.Getenv("LISTEN_ADDR")))
+	if err := server.Start(); err != nil {
+		log.Fatal("Fallo al iniciar el servidor:", err)
+	}
+
 }

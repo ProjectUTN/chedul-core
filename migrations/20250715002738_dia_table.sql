@@ -1,16 +1,12 @@
 -- +goose Up
 -- +goose StatementBegin
-create table if not exists horario(
+create table if not exists dias(
     id int generated always as identity primary key not null,
-    dia_id int not null,
-    hora_inicio time not null,
-    hora_fin time not null,
-    comision_id int not null
-);
-
+    nombre text not null check (char_length(nombre) <= 10)
+)
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-drop table horario;
+drop table dias;
 -- +goose StatementEnd
