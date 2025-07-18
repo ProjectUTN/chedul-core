@@ -12,6 +12,8 @@ watch:
     watchexec -r -e go -- just api
 
 build:
+  go mod tidy
+  go fmt ./...
   go build -o bin/chedul-api cmd/api/main.go
 
 goose name:

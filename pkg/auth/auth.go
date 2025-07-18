@@ -10,6 +10,6 @@ const AlumnoIDContextKey ContextKey = "alumnoID" // Clave para almacenar el ID d
 
 // GetAlumnoIDFromContext es una función de utilidad para obtener el AlumnoID de la petición.
 func GetAlumnoIDFromContext(c echo.Context) (int64, bool) {
-    id, ok := c.Get(string(AlumnoIDContextKey)).(int64)
-    return id, ok
+	id, ok := c.Get(string(AlumnoIDContextKey)).(int64)
+	return id, ok
 }

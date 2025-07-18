@@ -60,4 +60,3 @@ func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
 	fmt.Printf("GenerateJWT: Token generado: %s\n", tokenString)
 	return tokenString, nil
 }
-
