@@ -13,6 +13,7 @@ type AlumnoModel struct {
 	Nombre        string `json:"nombre" bun:"nombre,notnull"`
 	Email         string `json:"email" bun:"email,unique"`
 	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
+	Password      string `json:"-" bun:"password"`
 }
 
 type alumnoRepository struct {
@@ -21,19 +22,21 @@ type alumnoRepository struct {
 
 func (r *alumnoRepository) toDomain(model AlumnoModel) domain.Alumno {
 	return domain.Alumno{
-		ID:      model.ID,
-		Nombre:  model.Nombre,
-		Email:   model.Email,
-		Carrera: model.Carrera,
+		ID:       model.ID,
+		Nombre:   model.Nombre,
+		Email:    model.Email,
+		Carrera:  model.Carrera,
+		Password: model.Password,
 	}
 }
 
 func (r *alumnoRepository) toModel(alumno domain.Alumno) AlumnoModel {
 	return AlumnoModel{
-		ID:      alumno.ID,
-		Nombre:  alumno.Nombre,
-		Email:   alumno.Email,
-		Carrera: alumno.Carrera,
+		ID:       alumno.ID,
+		Nombre:   alumno.Nombre,
+		Email:    alumno.Email,
+		Carrera:  alumno.Carrera,
+		Password: alumno.Password,
 	}
 }
 func NewAlumnoRepository(db *bun.DB) domain.AlumnoRepository {

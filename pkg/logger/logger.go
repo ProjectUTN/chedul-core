@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func New(cfg *config.AppConfig, logLevel zapcore.Level) (*zap.Logger, error) {
+func New(cfg *config.AppConfig) (*zap.Logger, error) {
 	var encoderCfg zapcore.EncoderConfig
 	if cfg.IsProd() {
 		encoderCfg = zap.NewProductionEncoderConfig()
@@ -21,7 +21,7 @@ func New(cfg *config.AppConfig, logLevel zapcore.Level) (*zap.Logger, error) {
 	encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
 
 	config := zap.Config{
-		Level:             zap.NewAtomicLevelAt(logLevel),
+		Level:             zap.NewAtomicLevelAt(cfg.Server.LogLevel),
 		Development:       true,
 		DisableCaller:     false,
 		DisableStacktrace: true,

@@ -1,8 +1,12 @@
 package server
 
 import (
+	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.uber.org/zap"
@@ -66,4 +70,107 @@ func RecoverMiddleware(logger *zap.Logger) echo.MiddlewareFunc {
 			return nil
 		},
 	})
+}
+
+type CustomClaims struct {
+	Sub int64 `json:"sub"` // El ID del alumno
+	jwt.RegisteredClaims
+}
+
+func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			var tokenString string
+			var tokenSource string
+
+			// 1. Intentar obtener el token del encabezado Authorization
+			authHeader := c.Request().Header.Get("Authorization")
+			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+				tokenSource = "header"
+			}
+
+			// 2. Si no se encontró en el encabezado, intentar obtenerlo de la cookie
+			if tokenString == "" {
+				cookie, err := c.Cookie("Authorization")
+				if err == nil && cookie.Value != "" {
+					tokenString = cookie.Value
+					tokenSource = "cookie"
+				}
+			}
+
+			// Si el token sigue vacío después de buscar en header y cookie
+			if tokenString == "" {
+				logger.Warn("RequireAuthMiddleware: Token de autenticación faltante en encabezado o cookie",
+					zap.String("path", c.Request().URL.Path),
+					zap.String("method", c.Request().Method),
+					zap.String("remote_ip", c.RealIP()),
+				)
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token de autenticación faltante"})
+			}
+
+			// 3. Parsear y validar el token
+			token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
+
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					logger.Error("RequireAuthMiddleware: Método de firma inesperado",
+						zap.Any("alg", token.Header["alg"]),
+						zap.String("path", c.Request().URL.Path),
+						zap.String("method", c.Request().Method),
+						zap.String("remote_ip", c.RealIP()),
+						zap.String("token_source", tokenSource),
+					)
+					return nil, fmt.Errorf("método de firma inesperado: %v", token.Header["alg"])
+				}
+				return []byte(secretKey), nil
+			})
+
+			if err != nil {
+				logger.Error("RequireAuthMiddleware: Error al parsear o validar token",
+					zap.Error(err),
+					zap.String("token_string", tokenString),
+					zap.String("path", c.Request().URL.Path),
+					zap.String("method", c.Request().Method),
+					zap.String("remote_ip", c.RealIP()),
+					zap.String("token_source", tokenSource),
+				)
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token inválido o expirado"})
+			}
+
+			// 4. Verificar si el token es válido y extraer los claims
+			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+				// 5. Establecer el alumnoID en el contexto de Echo
+				c.Set("alumnoID", claims.Sub)
+				logger.Info("RequireAuthMiddleware: Autenticación exitosa",
+					zap.Int64("alumnoID", claims.Sub),
+					zap.String("path", c.Request().URL.Path),
+					zap.String("method", c.Request().Method),
+					zap.String("remote_ip", c.RealIP()),
+					zap.String("token_source", tokenSource),
+				)
+
+				// 6. Continuar con el siguiente manejador en la cadena
+				return next(c)
+			} else {
+				logger.Warn("RequireAuthMiddleware: Token no válido o claims incorrectos",
+					zap.String("path", c.Request().URL.Path),
+					zap.String("method", c.Request().Method),
+					zap.String("remote_ip", c.RealIP()),
+					zap.Bool("token_valid", token.Valid),
+					zap.String("token_source", tokenSource),
+				)
+				return c.JSON(http.StatusForbidden, map[string]string{"message": "Acceso prohibido. Token no válido."})
+			}
+		}
+	}
+}
+
+// GetAlumnoIDFromContext es una función de utilidad para obtener el alumnoID
+// del contexto de Echo en tus manejadores.
+func GetAlumnoIDFromContext(c echo.Context) (int64, error) {
+	alumnoID, ok := c.Get("alumnoID").(int64)
+	if !ok {
+		return 0, fmt.Errorf("alumnoID no encontrado en el contexto o tipo incorrecto")
+	}
+	return alumnoID, nil
 }

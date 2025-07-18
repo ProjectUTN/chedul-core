@@ -2,11 +2,9 @@ package server
 
 import (
 	"chedul-core/internals/handlers"
-	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"go.uber.org/zap"
 )
 
 func HttpErrorHandler(err error, c echo.Context) {
@@ -30,8 +28,6 @@ func HttpErrorHandler(err error, c echo.Context) {
 		c.JSON(http.StatusInternalServerError, errResp)
 	}
 
-	slog.Error("HTTP API Error ",
-		zap.String("err", err.Error()),
-		zap.String("path", c.Request().URL.Path),
-	)
+	c.Logger().Error("HTTP API Error ", "err ", err.Error(), "path ", c.Request().URL.Path)
+
 }

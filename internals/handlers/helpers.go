@@ -3,6 +3,10 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type ApiError struct {
@@ -30,4 +34,29 @@ func InvalidRequestData(errors map[string]string) ApiError {
 
 func InvalidJSON() ApiError {
 	return NewApiError(http.StatusBadRequest, fmt.Errorf("invalid JSON request data"))
+}
+
+func HashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	return string(hash), err
+}
+
+func CheckPassword(password, hashed string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
+	return err == nil
+}
+
+func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": alumnoID,
+		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+	})
+
+	tokenString, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", fmt.Errorf("error firmando token: %w", err)
+	}
+	fmt.Printf("GenerateJWT: Token generado: %s\n", tokenString)
+	return tokenString, nil
 }

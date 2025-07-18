@@ -10,16 +10,29 @@ import (
 )
 
 type Alumno struct {
-	ID      int64  `json:"id"`
-	Nombre  string `json:"nombre"`
-	Email   string `json:"email"`
-	Carrera int64  `json:"carrera"`
+	ID       int64  `json:"id"`
+	Nombre   string `json:"nombre"`
+	Email    string `json:"email"`
+	Carrera  int64  `json:"carrera"`
+	Password string `json:"password"`
 }
 
 type AlumnoRequest struct {
 	Nombre  string `json:"nombre"`
 	Email   string `json:"email"`
 	Carrera string `json:"carrera"`
+}
+
+type SignUpRequest struct {
+	Nombre   string `json:"nombre"`
+	Email    string `json:"email"`
+	Carrera  string `json:"carrera"`
+	Password string `json:"password"`
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 func (self *AlumnoRequest) Validate() map[string]string {
@@ -33,8 +46,30 @@ func (self *AlumnoRequest) Validate() map[string]string {
 		errors["email"] = err.Error()
 	}
 
-	if self.Carrera == "" {
+	if strings.TrimSpace(self.Carrera) == "" {
 		errors["carrera"] = fmt.Sprintf("'%v' no es una carrera valida", self.Carrera)
+	}
+
+	return errors
+}
+
+func (self *SignUpRequest) Validate() map[string]string {
+	errors := make(map[string]string)
+
+	if _, err := newAlumnoName(self.Nombre); err != nil {
+		errors["nombre"] = err.Error()
+	}
+
+	if _, err := newAlumnoEmail(self.Email); err != nil {
+		errors["email"] = err.Error()
+	}
+
+	if strings.TrimSpace(self.Carrera) == "" {
+		errors["carrera"] = "Carrera es requerida"
+	}
+
+	if len(self.Password) < 6 {
+		errors["password"] = "La contraseña debe tener al menos 6 caracteres"
 	}
 
 	return errors
