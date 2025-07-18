@@ -46,18 +46,18 @@ func CheckPassword(password, hashed string) bool {
 	return err == nil
 }
 
-func GenerateJWT(alumnoID int64, secretKey []byte) (string, error) {
+func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-	"sub": alumnoID,
-	"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
-})
+		"sub": alumnoID,
+		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+	})
 
-	tokenString, err := token.SignedString(secretKey)
+	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("error firmando token: %w", err)
 	}
-	
+	fmt.Printf("GenerateJWT: Token generado: %s\n", tokenString)
 	return tokenString, nil
 }
 

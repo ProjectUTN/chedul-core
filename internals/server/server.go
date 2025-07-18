@@ -89,7 +89,7 @@ func (s *Server) setupRoutes() {
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
 	
 
-	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger)
+	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger, s.config)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
 	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.logger)
 	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.logger)
@@ -101,8 +101,11 @@ func (s *Server) setupRoutes() {
 	api.POST("/signup", alumnoHandler.SignUp)
 	api.POST("/login", alumnoHandler.LogIn)
 
+	// TODO: agregar proteccion de rutas a aquellas que lo requieran
+	protectedAPI := api.Group("") 
+	protectedAPI.Use(RequireAuthMiddleware(s.config.JwtSecret, s.logger)) 
 
-	alumnos := api.Group("/alumnos")
+	alumnos := protectedAPI.Group("/alumnos")
 	alumnos.GET("", alumnoHandler.GetAll)
 	alumnos.GET("/:id", alumnoHandler.GetByID)
 	alumnos.POST("", alumnoHandler.Create)

@@ -24,6 +24,7 @@ type AppConfig struct {
 		Password string
 		Name     string
 	}
+	JwtSecret string
 }
 
 func Load() (*AppConfig, error) {
@@ -42,6 +43,7 @@ func Load() (*AppConfig, error) {
 		return nil, fmt.Errorf("La variable 'env' no es aceptada: %v", config.Env)
 	}
 
+	fmt.Println("Config loaded", "JwtSecret:", config.JwtSecret)
 
 	return &config, nil
 

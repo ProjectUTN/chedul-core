@@ -9,3 +9,5 @@ database:
   user: chedul
   password: chedul
   name: chedul-db
+
+JwtSecret: nEFOn1KDT5dtvT20yL2ZQNMywAE6LwEc2+KDBuYMY54=
