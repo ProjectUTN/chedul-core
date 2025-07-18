@@ -10,11 +10,11 @@ import (
 )
 
 type Alumno struct {
-	ID      int64  `json:"id"`
-	Nombre  string `json:"nombre"`
-	Email   string `json:"email"`
-	Carrera int64  `json:"carrera"`
-	Password string `json:"password"` 
+	ID       int64  `json:"id"`
+	Nombre   string `json:"nombre"`
+	Email    string `json:"email"`
+	Carrera  int64  `json:"carrera"`
+	Password string `json:"password"`
 }
 
 type AlumnoRequest struct {
@@ -24,14 +24,14 @@ type AlumnoRequest struct {
 }
 
 type SignUpRequest struct {
-	Nombre  string `json:"nombre"`
-	Email   string `json:"email"`
-	Carrera string  `json:"carrera"`
+	Nombre   string `json:"nombre"`
+	Email    string `json:"email"`
+	Carrera  string `json:"carrera"`
 	Password string `json:"password"`
 }
 
 type LoginRequest struct {
-	Email   string `json:"email"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -125,5 +125,3 @@ func newAlumnoName(s string) (alumnoName, error) {
 
 	return alumnoName(s), nil
 }
-
-

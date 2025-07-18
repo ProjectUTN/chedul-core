@@ -110,8 +110,8 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 			}
 
 			// 3. Parsear y validar el token
-			token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-		
+			token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
+
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					logger.Error("RequireAuthMiddleware: Método de firma inesperado",
 						zap.Any("alg", token.Header["alg"]),

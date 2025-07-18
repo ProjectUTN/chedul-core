@@ -3,6 +3,7 @@ module chedul-core
 go 1.24.4
 
 require (
+	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/rivo/uniseg v0.4.7
 	github.com/uptrace/bun v1.2.14
@@ -12,11 +13,12 @@ require (
 	go.uber.org/zap v1.27.0
 )
 
+require github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f // indirect
+
 require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/golang-jwt/jwt/v5 v5.2.3
-	github.com/labstack/echo-jwt/v4 v4.3.1
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/sagikazarmark/locafero v0.9.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect

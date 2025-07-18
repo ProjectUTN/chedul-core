@@ -1,13 +1,12 @@
 package db
 
 import (
+	"chedul-core/pkg/config"
 	"chedul-core/pkg/util"
 	"context"
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -19,28 +18,12 @@ import (
 
 var once sync.Once
 
-type ConnectionConfig struct {
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-}
-
-func DefaultConnectionConfig() *ConnectionConfig {
-	return &ConnectionConfig{
-		MaxOpenConns:    25,
-		MaxIdleConns:    5,
-		ConnMaxLifetime: 30 * time.Minute,
-		ConnMaxIdleTime: 5 * time.Minute,
-	}
-}
-
-func Open(dbUrl string) (*bun.DB, error) {
+func Open(config *config.AppConfig) (*bun.DB, error) {
 	var err error
 
 	var db *bun.DB
 	once.Do(func() {
-		db, err = createConnection(dbUrl)
+		db, err = createConnection(config)
 	})
 
 	if err != nil {
@@ -54,11 +37,11 @@ func Open(dbUrl string) (*bun.DB, error) {
 	return db, err
 }
 
-func createConnection(dbUrl string) (*bun.DB, error) {
+func createConnection(config *config.AppConfig) (*bun.DB, error) {
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(config.DatabaseUrl())))
 
-	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dbUrl)))
+	poolConfig := config.Server.Pool
 
-	poolConfig := getConnectionPoolConfig()
 	configureConnectionPool(sqlDB, poolConfig)
 
 	bunDB := bun.NewDB(sqlDB, pgdialect.New())
@@ -71,50 +54,14 @@ func createConnection(dbUrl string) (*bun.DB, error) {
 		return nil, fmt.Errorf("error al hacer ping a la base de datos: %w", err)
 	}
 
-	log.Printf("Base de datos conectada con configuración del pool: MaxOpen=%d, MaxIdle=%d, MaxLifetime=%v",
-		poolConfig.MaxOpenConns,
-		poolConfig.MaxIdleConns,
-		poolConfig.ConnMaxLifetime,
-	)
-
 	return bunDB, nil
 }
 
-func getConnectionPoolConfig() *ConnectionConfig {
-	config := DefaultConnectionConfig()
-
-	if maxOpen := os.Getenv("DB_MAX_OPEN_CONNS"); maxOpen != "" {
-		if val, err := strconv.Atoi(maxOpen); err == nil {
-			config.MaxOpenConns = val
-		}
-	}
-
-	if maxIdle := os.Getenv("DB_MAX_IDLE_CONNS"); maxIdle != "" {
-		if val, err := strconv.Atoi(maxIdle); err == nil {
-			config.MaxIdleConns = val
-		}
-	}
-
-	if maxLifetime := os.Getenv("DB_CONN_MAX_LIFETIME"); maxLifetime != "" {
-		if val, err := time.ParseDuration(maxLifetime); err == nil {
-			config.ConnMaxLifetime = val
-		}
-	}
-
-	if maxIdleTime := os.Getenv("DB_CONN_MAX_IDLE_TIME"); maxIdleTime != "" {
-		if val, err := time.ParseDuration(maxIdleTime); err == nil {
-			config.ConnMaxIdleTime = val
-		}
-	}
-
-	return config
-}
-
-func configureConnectionPool(sqlDB *sql.DB, config *ConnectionConfig) {
-	sqlDB.SetMaxOpenConns(config.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(config.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(config.ConnMaxLifetime)
-	sqlDB.SetConnMaxIdleTime(config.ConnMaxIdleTime)
+func configureConnectionPool(sqlDB *sql.DB, cfg *config.ConnectionConfig) {
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime))
+	sqlDB.SetConnMaxIdleTime(time.Duration(cfg.ConnMaxIdleTime))
 }
 
 func GetDBStats(db *bun.DB) sql.DBStats {
@@ -138,10 +85,6 @@ func PrintPoolStats(db *bun.DB) {
 }
 
 func HealthCheck(db *bun.DB, ctx context.Context) error {
-	if db == nil {
-		return fmt.Errorf("la base de datos no está inicializada")
-	}
-
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("falló el ping a la base de datos: %w", err)
 	}
@@ -152,18 +95,4 @@ func HealthCheck(db *bun.DB, ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func CloseDB(db *bun.DB) error {
-	if db != nil {
-		return db.Close()
-	}
-	return nil
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }

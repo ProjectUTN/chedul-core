@@ -7,27 +7,21 @@ import (
 	"chedul-core/pkg/logger"
 	"log"
 
-	"github.com/uptrace/bun"
 	"go.uber.org/zap"
 )
-
-type App struct {
-	conn   *bun.DB
-	logger *zap.Logger
-}
 
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal("Error leyendo la configuracion")
+		log.Fatal("Error leyendo la configuracion: ", err)
 	}
 
-	logger, err := logger.New(cfg, zap.DebugLevel)
+	logger, err := logger.New(cfg)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
 	}
 
-	db, err := db.Open(cfg.DatabaseUrl())
+	db, err := db.Open(cfg)
 	if err != nil {
 		logger.Fatal("Error al conectar con la DB", zap.Error(err))
 	}

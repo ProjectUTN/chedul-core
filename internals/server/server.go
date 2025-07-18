@@ -17,6 +17,13 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	Reset = "\033[0m"
+	Bold  = "\033[1m"
+	Green = "\033[32m"
+	Cyan  = "\033[36m"
+)
+
 type Server struct {
 	echo   *echo.Echo
 	config *config.AppConfig
@@ -27,6 +34,7 @@ type Server struct {
 func New(cfg *config.AppConfig, db *bun.DB, logger *zap.Logger) *Server {
 	api := echo.New()
 	api.HideBanner = true
+	api.HidePort = true
 	api.HTTPErrorHandler = HttpErrorHandler
 
 	return &Server{
@@ -36,16 +44,45 @@ func New(cfg *config.AppConfig, db *bun.DB, logger *zap.Logger) *Server {
 		logger: logger,
 	}
 }
+func (s *Server) printBanner() {
+
+	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) != 0 {
+		fmt.Print(Cyan)
+	}
+
+	fmt.Print(`
+  _______          __     __    _____            
+ / ___/ /  ___ ___/ /_ __/ /___/ ___/__  _______ 
+/ /__/ _ \/ -_) _  / // / /___/ /__/ _ \/ __/ -_)
+\___/_//_/\__/\_,_/\_,_/_/    \___/\___/_/  \__/ 
+
+`)
+
+	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) != 0 {
+		fmt.Print(Reset)
+	}
+}
+
+func (s *Server) Address() string {
+	return fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.Port)
+}
 
 func (s *Server) Start() error {
 	s.setupMiddleware()
 	s.setupRoutes()
 
 	go func() {
-		addr := fmt.Sprintf(":%s", s.config.Server.Port)
-		s.logger.Info("starting server", zap.String("addr", addr))
+		s.printBanner()
+		s.config.PrettyPrint()
 
-		if err := s.echo.Start(addr); err != nil && err != http.ErrServerClosed {
+		address := s.Address()
+
+		fmt.Println()
+		fmt.Println(Bold + "Server en:" + Reset)
+		fmt.Printf("  %sLocal%s:   %shttp://%s%s\n", Bold+Green, Reset, Bold+Cyan, address, Reset)
+		fmt.Println()
+
+		if err := s.echo.Start(address); err != nil && err != http.ErrServerClosed {
 			s.logger.Fatal("failed to start server", zap.Error(err))
 		}
 	}()
@@ -54,17 +91,17 @@ func (s *Server) Start() error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	s.logger.Info("shutting down server...")
+	s.logger.Info("SIGTERM detectado, cerrando el servidor...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := s.echo.Shutdown(ctx); err != nil {
-		s.logger.Error("failed to shutdown server", zap.Error(err))
+		s.logger.Error("Interrupcion al cerrar el servidor", zap.Error(err))
 		return err
 	}
 
-	s.logger.Info("server shutdown complete")
+	s.logger.Info("Cierre del servidor completado")
 	return nil
 }
 
@@ -87,7 +124,6 @@ func (s *Server) setupRoutes() {
 	materiaRepo := repositories.NewMateriaRepository(s.db)
 	condicionRepo := repositories.NewCondicionRepository(s.db)
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
-	
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger, s.config)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
@@ -102,8 +138,8 @@ func (s *Server) setupRoutes() {
 	api.POST("/login", alumnoHandler.LogIn)
 
 	// TODO: agregar proteccion de rutas a aquellas que lo requieran
-	protectedAPI := api.Group("") 
-	protectedAPI.Use(RequireAuthMiddleware(s.config.JwtSecret, s.logger)) 
+	protectedAPI := api.Group("")
+	protectedAPI.Use(RequireAuthMiddleware(s.config.JwtSecret.Expose(), s.logger))
 
 	alumnos := protectedAPI.Group("/alumnos")
 	alumnos.GET("", alumnoHandler.GetAll)
@@ -112,7 +148,6 @@ func (s *Server) setupRoutes() {
 	alumnos.PUT("/:id", alumnoHandler.Update)
 	alumnos.DELETE("/:id", alumnoHandler.Delete)
 	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)
-
 
 	carreras := api.Group("/carreras")
 	carreras.GET("", carreraHandler.GetAll)

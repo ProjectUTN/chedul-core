@@ -6,13 +6,13 @@ _default:
 
 
 api: build
-  LISTEN_ADDR=8080 ./bin/chedul-backend 
+  LISTEN_ADDR=8080 ./bin/chedul-api
 
 watch:
     watchexec -r -e go -- just api
 
 build:
-  go build -o bin/chedul-backend cmd/api/main.go
+  go build -o bin/chedul-api cmd/api/main.go
 
 goose name:
   goose -dir={{MIGRATION_PATH}} create {{name}} sql

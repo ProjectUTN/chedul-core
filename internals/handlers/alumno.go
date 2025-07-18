@@ -18,7 +18,7 @@ type AlumnoHandler struct {
 	alumnoRepo  domain.AlumnoRepository
 	carreraRepo domain.CarreraRepository
 	logger      *zap.Logger
-	appConfig   *config.AppConfig 
+	appConfig   *config.AppConfig
 }
 
 func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, cfg *config.AppConfig) *AlumnoHandler {
@@ -64,7 +64,6 @@ func (h *AlumnoHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
 	}
-	
 
 	if errors := req.Validate(); len(errors) > 0 {
 		return InvalidRequestData(errors)
@@ -94,7 +93,7 @@ func (h *AlumnoHandler) Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, alumno)
 }
 
-func  (h *AlumnoHandler) SignUp(c echo.Context) error {
+func (h *AlumnoHandler) SignUp(c echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.SignUpRequest
 
@@ -153,17 +152,17 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 	if !CheckPassword(req.Password, alumno.Password) {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
 	}
-	
-	h.logger.Info("LogIn: JwtSecret cargado", zap.String("value", h.appConfig.JwtSecret))
 
-	secretKeyBytes, err := base64.StdEncoding.DecodeString(h.appConfig.JwtSecret)
+	h.logger.Info("LogIn: JwtSecret cargado")
+
+	secretKeyBytes, err := base64.StdEncoding.DecodeString(h.appConfig.JwtSecret.Expose())
 	if err != nil {
 		h.logger.Error("LogIn: Error decodificando JwtSecret", zap.Error(err))
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error interno al decodificar la clave"})
 	}
 	h.logger.Info("LogIn: Clave decodificada", zap.String("key", fmt.Sprintf("%x", secretKeyBytes)))
 
-	token, err := GenerateJWT(alumno.ID, h.appConfig.JwtSecret)
+	token, err := GenerateJWT(alumno.ID, h.appConfig.JwtSecret.Expose())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token"})
 	}
@@ -180,9 +179,9 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"user": map[string]interface{}{
-			"id":    alumno.ID,
+			"id":     alumno.ID,
 			"nombre": alumno.Nombre,
-			"email": alumno.Email,
+			"email":  alumno.Email,
 		},
 	})
 }
@@ -245,4 +244,3 @@ func (h *AlumnoHandler) Delete(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, "Alumno deleted successfully")
 }
-
