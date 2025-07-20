@@ -58,9 +58,10 @@ func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFu
 
 func CORSMiddleware() echo.MiddlewareFunc {
 	return middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowHeaders: []string{"*"},
-		AllowMethods: []string{"*"},
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowCredentials: true,
 	})
 }
 
@@ -124,7 +125,6 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 				// si el token expiro hay que enviar la peticion desde el front para generar otro
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unauthorized"})
 			}
-			
 
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
 				c.Set("alumnoID", claims.Sub)

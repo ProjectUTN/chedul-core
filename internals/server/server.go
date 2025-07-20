@@ -106,9 +106,10 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) setupMiddleware() {
-	s.echo.Use(TracingMiddleware(s.logger, "chedul-service"))
 	s.echo.Use(CORSMiddleware())
 	s.echo.Use(RecoverMiddleware(s.logger))
+	s.echo.Use(TracingMiddleware(s.logger, "chedul-service"))
+
 }
 
 func (s *Server) setupRoutes() {
@@ -136,7 +137,7 @@ func (s *Server) setupRoutes() {
 
 	api.POST("/signup", alumnoHandler.SignUp)
 	api.POST("/login", alumnoHandler.LogIn)
-	api.GET("/refresh-token", alumnoHandler.RefreshToken)
+	api.POST("/refresh-token", alumnoHandler.RefreshToken)
 
 	// TODO: agregar proteccion de rutas a aquellas que lo requieran
 	protectedAPI := api.Group("")
