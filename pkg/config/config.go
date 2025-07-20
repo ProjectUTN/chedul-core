@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -28,7 +29,6 @@ const (
 )
 
 type AppConfig struct {
-	Env       string         `json:"env"`
 	Server    ServerConfig   `json:"server"`
 	Database  DatabaseConfig `json:"database"`
 	JwtSecret *Secret        `json:"jwt_secret"`
@@ -95,18 +95,31 @@ func (c *AppConfig) PrettyPrint() {
 	fmt.Println(string(s))
 }
 
+func (c *AppConfig) overrideWithEnv() *AppConfig {
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		c.Database.Host = dbHost
+	}
+
+	if apiHost := os.Getenv("API_HOST"); apiHost != "" {
+		c.Server.Host = apiHost
+	}
+
+	return c
+}
+
 func (c *AppConfig) validate() error {
 	var errs []error
 
-	if !allowedEnvs[c.Env] {
-		errs = append(errs, fmt.Errorf("env invalido %q: debe ser development, test o production", c.Env))
+	env := getServerEnv()
+	if !allowedEnvs[env] {
+		errs = append(errs, fmt.Errorf("env invalido %q: debe ser development, test o production", env))
 	}
 
 	if net.ParseIP(c.Server.Host) == nil {
 		errs = append(errs, fmt.Errorf("server.host invalido %q: debe ser una IP valida", c.Server.Host))
 	}
 
-	if net.ParseIP(c.Database.Host) == nil {
+	if net.ParseIP(c.Database.Host) == nil && os.Getenv("ALLOW_DB_ALIAS") != "true" {
 		errs = append(errs, fmt.Errorf("database.host invalido %q: debe ser una IP valida", c.Database.Host))
 	}
 
@@ -131,10 +144,20 @@ func (c *AppConfig) validate() error {
 }
 
 func Load() (*AppConfig, error) {
-	viper.SetConfigFile("config.yml")
+	configDir := "configuration/"
+	viper.SetConfigFile(configDir + "base.yml")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("Error leyendo el archivo de configuracion: %w", err)
+	}
+
+	env := getServerEnv()
+	envConfig := configDir + fmt.Sprintf("%s.yml", env)
+	if _, err := os.Stat(envConfig); err == nil {
+		viper.SetConfigFile(envConfig)
+		if err := viper.MergeInConfig(); err != nil {
+			return nil, fmt.Errorf("Error leyendo el archivo de configuracion para %s: %w", env, err)
+		}
 	}
 
 	var config AppConfig
@@ -148,7 +171,7 @@ func Load() (*AppConfig, error) {
 		return nil, fmt.Errorf("No se pudo decodificar la configuracion: %w", err)
 	}
 
-	if err := config.validate(); err != nil {
+	if err := config.overrideWithEnv().validate(); err != nil {
 		return nil, err
 	}
 
@@ -170,7 +193,7 @@ func (self *AppConfig) DatabaseUrl() string {
 }
 
 func (self *AppConfig) IsProd() bool {
-	return self.Env == "production"
+	return getServerEnv() == "production"
 }
 
 func logLevelDecodeHook() mapstructure.DecodeHookFunc {
@@ -208,4 +231,13 @@ func durationDecodeHook() mapstructure.DecodeHookFunc {
 
 		return Duration(dur), nil
 	}
+}
+
+func getServerEnv() string {
+	env := os.Getenv("SERVER_ENV")
+	if env == "" {
+		env = "development"
+	}
+
+	return env
 }

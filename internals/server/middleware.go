@@ -1,6 +1,7 @@
 package server
 
 import (
+	"chedul-core/internals/handlers"
 	"fmt"
 	"net/http"
 	"strings"
@@ -83,7 +84,6 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 			var accessTokenString string
 			var tokenSource string
 
-			// Obtener acces token
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 				accessTokenString = strings.TrimPrefix(authHeader, "Bearer ")
@@ -94,11 +94,10 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.String("method", c.Request().Method),
 					zap.String("remote_ip", c.RealIP()),
 				)
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Access Token faltante en encabezado Authorization"})
+				return handlers.NewApiError(http.StatusUnauthorized, fmt.Errorf("Access Token faltante en encabezado Authorization"))
 			}
 
-			// Validar acces token
-			token, err := jwt.ParseWithClaims(accessTokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			token, err := jwt.ParseWithClaims(accessTokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					logger.Error("RequireAuthMiddleware: Método de firma inesperado para access token",
 						zap.Any("alg", token.Header["alg"]),
@@ -144,7 +143,7 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.Bool("token_valid", token.Valid),
 					zap.String("token_source", tokenSource),
 				)
-				return c.JSON(http.StatusForbidden, map[string]string{"message": "Acceso prohibido. Access Token no válido."})
+				return handlers.NewApiError(http.StatusForbidden, fmt.Errorf("Acceso prohibido. Access Token no válido."))
 			}
 		}
 	}
