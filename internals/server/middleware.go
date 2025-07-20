@@ -121,8 +121,10 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.String("token_source", tokenSource),
 				)
 
-				return handlers.NewApiError(http.StatusUnauthorized, fmt.Errorf("Access Token inválido o expirado"))
-			}
+				// si el token expiro hay que enviar la peticion desde el front para generar otro
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unauthorized"})
+
+			
 
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
 				c.Set("alumnoID", claims.Sub)
