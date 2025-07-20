@@ -29,7 +29,6 @@ const (
 )
 
 type AppConfig struct {
-	Env       string         `json:"env"`
 	Server    ServerConfig   `json:"server"`
 	Database  DatabaseConfig `json:"database"`
 	JwtSecret *Secret        `json:"jwt_secret"`
@@ -111,8 +110,9 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 func (c *AppConfig) validate() error {
 	var errs []error
 
-	if !allowedEnvs[c.Env] {
-		errs = append(errs, fmt.Errorf("env invalido %q: debe ser development, test o production", c.Env))
+	env := getServerEnv()
+	if !allowedEnvs[env] {
+		errs = append(errs, fmt.Errorf("env invalido %q: debe ser development, test o production", env))
 	}
 
 	if net.ParseIP(c.Server.Host) == nil {
@@ -144,10 +144,20 @@ func (c *AppConfig) validate() error {
 }
 
 func Load() (*AppConfig, error) {
-	viper.SetConfigFile("config.yml")
+	configDir := "configuration/"
+	viper.SetConfigFile(configDir + "base.yml")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("Error leyendo el archivo de configuracion: %w", err)
+	}
+
+	env := getServerEnv()
+	envConfig := configDir + fmt.Sprintf("%s.yml", env)
+	if _, err := os.Stat(envConfig); err == nil {
+		viper.SetConfigFile(envConfig)
+		if err := viper.MergeInConfig(); err != nil {
+			return nil, fmt.Errorf("Error leyendo el archivo de configuracion para %s: %w", env, err)
+		}
 	}
 
 	var config AppConfig
@@ -183,7 +193,7 @@ func (self *AppConfig) DatabaseUrl() string {
 }
 
 func (self *AppConfig) IsProd() bool {
-	return self.Env == "production"
+	return getServerEnv() == "production"
 }
 
 func logLevelDecodeHook() mapstructure.DecodeHookFunc {
@@ -221,4 +231,13 @@ func durationDecodeHook() mapstructure.DecodeHookFunc {
 
 		return Duration(dur), nil
 	}
+}
+
+func getServerEnv() string {
+	env := os.Getenv("SERVER_ENV")
+	if env == "" {
+		env = "development"
+	}
+
+	return env
 }

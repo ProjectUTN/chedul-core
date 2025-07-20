@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     environment:
       ALLOW_DB_ALIAS: true
-      API_HOST: 0.0.0.0
+      SERVER_ENV: production
       DB_HOST: database
     ports:
       - "8080:8080"
