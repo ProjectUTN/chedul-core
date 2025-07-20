@@ -19,7 +19,7 @@ FROM scratch
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=builder /app/config.yml /config.yml
+COPY --from=builder /app/configuration /configuration
 COPY --from=builder /app/main /main
 
 USER 1000
