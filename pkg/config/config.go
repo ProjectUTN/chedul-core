@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -95,6 +96,18 @@ func (c *AppConfig) PrettyPrint() {
 	fmt.Println(string(s))
 }
 
+func (c *AppConfig) overrideWithEnv() *AppConfig {
+	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
+		c.Database.Host = dbHost
+	}
+
+	if apiHost := os.Getenv("API_HOST"); apiHost != "" {
+		c.Server.Host = apiHost
+	}
+
+	return c
+}
+
 func (c *AppConfig) validate() error {
 	var errs []error
 
@@ -106,7 +119,7 @@ func (c *AppConfig) validate() error {
 		errs = append(errs, fmt.Errorf("server.host invalido %q: debe ser una IP valida", c.Server.Host))
 	}
 
-	if net.ParseIP(c.Database.Host) == nil {
+	if net.ParseIP(c.Database.Host) == nil && os.Getenv("ALLOW_DB_ALIAS") != "true" {
 		errs = append(errs, fmt.Errorf("database.host invalido %q: debe ser una IP valida", c.Database.Host))
 	}
 
@@ -148,7 +161,7 @@ func Load() (*AppConfig, error) {
 		return nil, fmt.Errorf("No se pudo decodificar la configuracion: %w", err)
 	}
 
-	if err := config.validate(); err != nil {
+	if err := config.overrideWithEnv().validate(); err != nil {
 		return nil, err
 	}
 

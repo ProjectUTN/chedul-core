@@ -25,7 +25,6 @@ func main() {
 	if err != nil {
 		logger.Fatal("Error al conectar con la DB", zap.Error(err))
 	}
-	defer db.Close()
 
 	server := server.New(cfg, db, logger)
 
@@ -33,4 +32,5 @@ func main() {
 		log.Fatal("Fallo al iniciar el servidor:", err)
 	}
 
+	defer db.Close()
 }

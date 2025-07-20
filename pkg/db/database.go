@@ -46,15 +46,23 @@ func createConnection(config *config.AppConfig) (*bun.DB, error) {
 
 	bunDB := bun.NewDB(sqlDB, pgdialect.New())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	var lastErr error
+	retries := 5
+	for i := range retries {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := bunDB.PingContext(ctx)
+		cancel()
 
-	if err := bunDB.PingContext(ctx); err != nil {
-		sqlDB.Close()
-		return nil, fmt.Errorf("error al hacer ping a la base de datos: %w", err)
+		if err == nil {
+			return bunDB, nil
+		}
+		lastErr = err
+		log.Printf("⏳ Intento %d/%d: Esperando por conexion a la DB... (%v)", i+1, retries, err)
+		time.Sleep(2 * time.Second)
 	}
 
-	return bunDB, nil
+	sqlDB.Close()
+	return nil, fmt.Errorf("error al hacer ping a la base de datos luego de %d: %w", retries, lastErr)
 }
 
 func configureConnectionPool(sqlDB *sql.DB, cfg *config.ConnectionConfig) {
