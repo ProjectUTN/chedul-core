@@ -136,6 +136,7 @@ func (s *Server) setupRoutes() {
 
 	api.POST("/signup", alumnoHandler.SignUp)
 	api.POST("/login", alumnoHandler.LogIn)
+	api.POST("/refresh-token", alumnoHandler.RefreshToken)
 
 	// TODO: agregar proteccion de rutas a aquellas que lo requieran
 	protectedAPI := api.Group("")

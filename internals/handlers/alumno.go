@@ -3,13 +3,13 @@ package handlers
 import (
 	"chedul-core/internals/domain"
 	"chedul-core/pkg/config"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 )
@@ -146,44 +146,104 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 
 	alumno, err := h.alumnoRepo.GetByEmail(ctx, email)
 	if err != nil || alumno == nil {
+		h.logger.Warn("LogIn: Intento de login fallido - credenciales inválidas", zap.String("email", email))
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
 	}
 
 	if !CheckPassword(req.Password, alumno.Password) {
+		h.logger.Warn("LogIn: Intento de login fallido - contraseña incorrecta", zap.String("email", email))
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
 	}
 
-	h.logger.Info("LogIn: JwtSecret cargado")
-
-	secretKeyBytes, err := base64.StdEncoding.DecodeString(h.appConfig.JwtSecret.Expose())
-	if err != nil {
-		h.logger.Error("LogIn: Error decodificando JwtSecret", zap.Error(err))
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error interno al decodificar la clave"})
-	}
-	h.logger.Info("LogIn: Clave decodificada", zap.String("key", fmt.Sprintf("%x", secretKeyBytes)))
-
-	token, err := GenerateJWT(alumno.ID, h.appConfig.JwtSecret.Expose())
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token"})
+	jwtSecret := h.appConfig.JwtSecret.Expose()
+	if jwtSecret == "" {
+		h.logger.Error("LogIn: JwtSecret no configurado")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error de configuración del servidor"})
 	}
 
-	cookie := new(http.Cookie)
-	cookie.Name = "Authorization"
-	cookie.Value = token
-	cookie.Path = "/"
-	cookie.Expires = time.Now().Add(30 * 24 * time.Hour)
-	cookie.Secure = h.appConfig.IsProd()
-	cookie.HttpOnly = true
-	cookie.SameSite = http.SameSiteLaxMode
-	c.SetCookie(cookie)
+	accessToken, err := GenerateAccessToken(alumno.ID, jwtSecret)
+	if err != nil {
+		h.logger.Error("LogIn: No se pudo generar el access token", zap.Error(err), zap.Int64("alumno_id", alumno.ID))
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token de acceso"})
+	}
+
+	refreshToken, err := GenerateRefreshToken(alumno.ID, jwtSecret)
+	if err != nil {
+		h.logger.Error("LogIn: No se pudo generar el refresh token", zap.Error(err), zap.Int64("alumno_id", alumno.ID))
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token de refresco"})
+	}
+
+	refreshTokenCookie := new(http.Cookie)
+	refreshTokenCookie.Name = "refreshToken"
+	refreshTokenCookie.Value = refreshToken
+	refreshTokenCookie.Path = "/"
+	refreshTokenCookie.Expires = time.Now().Add(30 * 24 * time.Hour)
+	refreshTokenCookie.Secure = h.appConfig.IsProd()
+	refreshTokenCookie.HttpOnly = true
+	refreshTokenCookie.SameSite = http.SameSiteLaxMode
+	c.SetCookie(refreshTokenCookie)
+
+	h.logger.Info("LogIn: Autenticación exitosa", zap.Int64("alumno_id", alumno.ID), zap.String("email", email))
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
+		"accessToken": accessToken,
 		"user": map[string]interface{}{
 			"id":     alumno.ID,
 			"nombre": alumno.Nombre,
 			"email":  alumno.Email,
 		},
 	})
+}
+
+func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
+	refreshTokenCookie, err := c.Cookie("refreshToken")
+
+	if err != nil || refreshTokenCookie.Value == "" {
+		h.logger.Warn("RefreshToken: Refresh Token faltante o inválido en cookie", zap.Error(err))
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Refresh Token faltante"})
+	}
+
+	refreshTokenString := refreshTokenCookie.Value
+	jwtSecret := h.appConfig.JwtSecret.Expose()
+
+	token, err := jwt.ParseWithClaims(refreshTokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			h.logger.Error("RefreshToken: Método de firma inesperado para refresh token", zap.Any("alg", token.Header["alg"]))
+			return nil, fmt.Errorf("método de firma inesperado")
+		}
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil {
+		h.logger.Error("RefreshToken: Error al parsear o validar refresh token", zap.Error(err))
+		// Si el refresh token es inválido o expirado, forzar logout
+		c.SetCookie(&http.Cookie{
+			Name:     "refreshToken",
+			Value:    "",
+			Path:     "/",
+			Expires:  time.Unix(0, 0),
+			HttpOnly: true,
+			Secure:   h.appConfig.IsProd(),
+			SameSite: http.SameSiteLaxMode,
+		})
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Refresh Token inválido o expirado. Por favor, inicie sesión de nuevo."})
+	}
+
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok || !token.Valid {
+		h.logger.Warn("RefreshToken: Claims de refresh token inválidos o token no válido")
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Refresh Token inválido"})
+	}
+
+	newAccessToken, err := GenerateAccessToken(claims.Sub, jwtSecret)
+	if err != nil {
+		h.logger.Error("RefreshToken: No se pudo generar un nuevo access token", zap.Error(err), zap.Int64("alumno_id", claims.Sub))
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar un nuevo token de acceso"})
+	}
+
+	h.logger.Info("RefreshToken: Nuevo access token generado", zap.Int64("alumno_id", claims.Sub))
+
+	return c.JSON(http.StatusOK, map[string]string{"accessToken": newAccessToken})
 }
 
 func (h *AlumnoHandler) Update(c echo.Context) error {

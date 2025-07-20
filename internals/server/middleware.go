@@ -73,47 +73,34 @@ func RecoverMiddleware(logger *zap.Logger) echo.MiddlewareFunc {
 }
 
 type CustomClaims struct {
-	Sub int64 `json:"sub"` // El ID del alumno
+	Sub int64 `json:"sub"`
 	jwt.RegisteredClaims
 }
 
 func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			var tokenString string
+			var accessTokenString string
 			var tokenSource string
 
-			// 1. Intentar obtener el token del encabezado Authorization
+			// Obtener acces token
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+				accessTokenString = strings.TrimPrefix(authHeader, "Bearer ")
 				tokenSource = "header"
-			}
-
-			// 2. Si no se encontró en el encabezado, intentar obtenerlo de la cookie
-			if tokenString == "" {
-				cookie, err := c.Cookie("Authorization")
-				if err == nil && cookie.Value != "" {
-					tokenString = cookie.Value
-					tokenSource = "cookie"
-				}
-			}
-
-			// Si el token sigue vacío después de buscar en header y cookie
-			if tokenString == "" {
-				logger.Warn("RequireAuthMiddleware: Token de autenticación faltante en encabezado o cookie",
+			} else {
+				logger.Warn("RequireAuthMiddleware: Access Token faltante en encabezado Authorization",
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
 					zap.String("remote_ip", c.RealIP()),
 				)
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token de autenticación faltante"})
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Access Token faltante en encabezado Authorization"})
 			}
 
-			// 3. Parsear y validar el token
-			token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
-
+			// Validar acces token
+			token, err := jwt.ParseWithClaims(accessTokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					logger.Error("RequireAuthMiddleware: Método de firma inesperado",
+					logger.Error("RequireAuthMiddleware: Método de firma inesperado para access token",
 						zap.Any("alg", token.Header["alg"]),
 						zap.String("path", c.Request().URL.Path),
 						zap.String("method", c.Request().Method),
@@ -126,22 +113,21 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 			})
 
 			if err != nil {
-				logger.Error("RequireAuthMiddleware: Error al parsear o validar token",
+				logger.Error("RequireAuthMiddleware: Error al parsear o validar access token",
 					zap.Error(err),
-					zap.String("token_string", tokenString),
+					zap.String("token_string", accessTokenString),
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
 					zap.String("remote_ip", c.RealIP()),
 					zap.String("token_source", tokenSource),
 				)
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Token inválido o expirado"})
+				// si el token expiro hay que enviar la peticion desde el front para generar otro
+				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Access Token inválido o expirado"})
 			}
 
-			// 4. Verificar si el token es válido y extraer los claims
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
-				// 5. Establecer el alumnoID en el contexto de Echo
 				c.Set("alumnoID", claims.Sub)
-				logger.Info("RequireAuthMiddleware: Autenticación exitosa",
+				logger.Info("RequireAuthMiddleware: Autenticación exitosa con Access Token",
 					zap.Int64("alumnoID", claims.Sub),
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
@@ -149,24 +135,21 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.String("token_source", tokenSource),
 				)
 
-				// 6. Continuar con el siguiente manejador en la cadena
 				return next(c)
 			} else {
-				logger.Warn("RequireAuthMiddleware: Token no válido o claims incorrectos",
+				logger.Warn("RequireAuthMiddleware: Access Token no válido o claims incorrectos",
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
 					zap.String("remote_ip", c.RealIP()),
 					zap.Bool("token_valid", token.Valid),
 					zap.String("token_source", tokenSource),
 				)
-				return c.JSON(http.StatusForbidden, map[string]string{"message": "Acceso prohibido. Token no válido."})
+				return c.JSON(http.StatusForbidden, map[string]string{"message": "Acceso prohibido. Access Token no válido."})
 			}
 		}
 	}
 }
 
-// GetAlumnoIDFromContext es una función de utilidad para obtener el alumnoID
-// del contexto de Echo en tus manejadores.
 func GetAlumnoIDFromContext(c echo.Context) (int64, error) {
 	alumnoID, ok := c.Get("alumnoID").(int64)
 	if !ok {

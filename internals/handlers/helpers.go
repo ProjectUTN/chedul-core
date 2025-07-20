@@ -46,17 +46,61 @@ func CheckPassword(password, hashed string) bool {
 	return err == nil
 }
 
-func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
+// func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": alumnoID,
-		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
-	})
+// 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+// 		"sub": alumnoID,
+// 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+// 	})
 
+// 	tokenString, err := token.SignedString([]byte(secretKey))
+// 	if err != nil {
+// 		return "", fmt.Errorf("error firmando token: %w", err)
+// 	}
+// 	fmt.Printf("GenerateJWT: Token generado: %s\n", tokenString)
+// 	return tokenString, nil
+// }
+
+type CustomClaims struct {
+	Sub int64 `json:"sub"`
+	jwt.RegisteredClaims
+}
+
+func GenerateAccessToken(alumnoID int64, secretKey string) (string, error) {
+
+	expirationTime := time.Now().Add(15 * time.Minute)
+	claims := &CustomClaims{
+		Sub: alumnoID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", fmt.Errorf("error firmando token: %w", err)
+		return "", fmt.Errorf("error firmando access token: %w", err)
 	}
-	fmt.Printf("GenerateJWT: Token generado: %s\n", tokenString)
+	fmt.Printf("GenerateAccessToken: Token generado: %s\n", tokenString)
+	return tokenString, nil
+}
+
+func GenerateRefreshToken(alumnoID int64, secretKey string) (string, error) {
+	expirationTime := time.Now().Add(30 * 24 * time.Hour)
+	claims := &CustomClaims{
+		Sub: alumnoID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secretKey))
+	if err != nil {
+		return "", fmt.Errorf("error firmando refresh token: %w", err)
+	}
+	fmt.Printf("GenerateRefreshToken: Token generado: %s\n", tokenString)
 	return tokenString, nil
 }
