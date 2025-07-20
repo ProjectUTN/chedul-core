@@ -4,17 +4,21 @@ MIGRATION_PATH:="migrations"
 _default:
   @just --list
 
-
-api: build
-  LISTEN_ADDR=8080 ./bin/chedul-api
+api build_flag="": build
+    docker compose up {{ if build_flag == "rebuild" { "--build" } else { "" } }}
 
 watch:
-    watchexec -r -e go -- just api
+    watchexec -r -e go -- just api rebuild
 
-build:
+build: fmt lint
   go mod tidy
-  go fmt ./...
   go build -o bin/chedul-api cmd/api/main.go
+
+fmt:
+  go fmt ./...
+
+lint:
+  gocritic check ./...
 
 goose name:
   goose -dir={{MIGRATION_PATH}} create {{name}} sql
