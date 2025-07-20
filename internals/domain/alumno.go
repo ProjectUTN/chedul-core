@@ -14,7 +14,7 @@ type Alumno struct {
 	Nombre   string `json:"nombre"`
 	Email    string `json:"email"`
 	Carrera  int64  `json:"carrera"`
-	Password string `json:"password"`
+	Password string
 }
 
 type AlumnoRequest struct {

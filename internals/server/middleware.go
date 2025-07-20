@@ -165,12 +165,4 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 	}
 }
 
-// GetAlumnoIDFromContext es una función de utilidad para obtener el alumnoID
-// del contexto de Echo en tus manejadores.
-func GetAlumnoIDFromContext(c echo.Context) (int64, error) {
-	alumnoID, ok := c.Get("alumnoID").(int64)
-	if !ok {
-		return 0, fmt.Errorf("alumnoID no encontrado en el contexto o tipo incorrecto")
-	}
-	return alumnoID, nil
-}
+
