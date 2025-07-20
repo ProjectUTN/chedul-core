@@ -120,9 +120,11 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.String("remote_ip", c.RealIP()),
 					zap.String("token_source", tokenSource),
 				)
+
 				// si el token expiro hay que enviar la peticion desde el front para generar otro
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unauthorized"})
-			}
+
+			
 
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
 				c.Set("alumnoID", claims.Sub)
