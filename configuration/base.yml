@@ -13,5 +13,6 @@ database:
   user: chedul
   password: chedul
   name: chedul-db
+  require_ssl: false
 
 JwtSecret: nEFOn1KDT5dtvT20yL2ZQNMywAE6LwEc2+KDBuYMY54=

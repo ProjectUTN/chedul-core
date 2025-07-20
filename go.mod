@@ -6,6 +6,7 @@ require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/rivo/uniseg v0.4.7
+	github.com/stretchr/testify v1.10.0
 	github.com/uptrace/bun v1.2.14
 	github.com/uptrace/bun/dialect/pgdialect v1.2.14
 	github.com/uptrace/bun/driver/pgdriver v1.2.14
@@ -13,7 +14,13 @@ require (
 	go.uber.org/zap v1.27.0
 )
 
-require github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f // indirect
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/hokaccha/go-prettyjson v0.0.0-20211117102719-0474bc63780f // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rogpeppe/go-internal v1.13.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+)
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect

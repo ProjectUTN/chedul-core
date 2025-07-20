@@ -43,5 +43,5 @@ kill-db:
   docker kill chedul-db
 
 test dir="...":
-  go test -v -cover ./{{dir}}
+  CONFIG_DIR=../configuration/ go test -v -cover ./{{dir}}
 
