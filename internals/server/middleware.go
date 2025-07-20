@@ -123,7 +123,7 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 
 				// si el token expiro hay que enviar la peticion desde el front para generar otro
 				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Unauthorized"})
-
+			}
 			
 
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
