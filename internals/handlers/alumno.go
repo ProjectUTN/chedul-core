@@ -57,42 +57,6 @@ func (h *AlumnoHandler) GetByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, alumno)
 }
 
-func (h *AlumnoHandler) Create(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	var req domain.AlumnoRequest
-	if err := c.Bind(&req); err != nil {
-		return InvalidJSON()
-	}
-
-	if errors := req.Validate(); len(errors) > 0 {
-		return InvalidRequestData(errors)
-	}
-
-	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		// TODO: Cambiar el error
-		return InvalidJSON()
-	}
-
-	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
-	if err != nil {
-		// TODO: Cambiar el error
-		return InvalidJSON()
-	}
-
-	alumno := &domain.Alumno{
-		Nombre:  strings.TrimSpace(req.Nombre),
-		Email:   strings.ToLower(strings.TrimSpace(req.Email)),
-		Carrera: carrera.ID,
-	}
-
-	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusCreated, alumno)
-}
-
 func (h *AlumnoHandler) SignUp(c echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.SignUpRequest
@@ -101,32 +65,22 @@ func (h *AlumnoHandler) SignUp(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
+	alumno, errors := req.Validate()
+	if len(errors) > 0 {
 		return InvalidRequestData(errors)
 	}
 
 	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas, Correo ya existente"})
 	}
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
 	}
+	alumno.Carrera = carrera.ID
 
-	hashedPassword, err := HashPassword(req.Password)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error al encriptar la contraseña"})
-	}
-
-	alumno := &domain.Alumno{
-		Nombre:   req.Nombre,
-		Email:    strings.ToLower(req.Email),
-		Carrera:  carrera.ID,
-		Password: hashedPassword,
-	}
-
-	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
+	if err := h.alumnoRepo.Create(ctx, &alumno); err != nil {
 		return err
 	}
 
@@ -273,7 +227,12 @@ func (h *AlumnoHandler) Update(c echo.Context) error {
 		// TODO: Mejorar el error
 		return InvalidJSON()
 	}
-	alumno.Email = req.Email
+
+	email, err := domain.NewEmail(req.Email)
+	if err != nil {
+		return err
+	}
+	alumno.Email = email
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {

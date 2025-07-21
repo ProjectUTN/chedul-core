@@ -38,6 +38,43 @@ type Server struct {
 	Logger    *zap.Logger
 }
 
+// Usado unicamente para testeos
+func BuildWithoutDB(configuration config.AppConfig) *Server {
+	// TODO: Encontrar una mejora manera de hacer esto
+	logger, err := logger.New(configuration.Server.LogLevel)
+	if err != nil {
+		log.Fatal("Error iniciando logger:", err)
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
+	if err != nil {
+		log.Fatal("Fallo al unirse a un puerto aleatorio:", err)
+	}
+
+	host := configuration.Server.Host
+	port := listener.Addr().(*net.TCPAddr).Port
+	// FIX: Esto trae una race condition entre que esta funcion devuelve Server y se llama a server.Run()
+	// El puerto puede ser ocupado de imprevisto por otra app
+	listener.Close()
+
+	api := echo.New()
+	api.HideBanner = true
+	api.HidePort = true
+	api.HTTPErrorHandler = HttpErrorHandler
+
+	server := Server{
+		Echo:     api,
+		Host:     host,
+		Port:     port,
+		ConnPool: nil,
+		Logger:   logger,
+	}
+	server.setupMiddleware()
+	server.setupRoutes()
+
+	return &server
+}
+
 func Build(configuration config.AppConfig) *Server {
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
@@ -166,7 +203,6 @@ func (s *Server) setupRoutes() {
 	alumnos := protectedAPI.Group("/alumnos")
 	alumnos.GET("", alumnoHandler.GetAll)
 	alumnos.GET("/:id", alumnoHandler.GetByID)
-	alumnos.POST("", alumnoHandler.Create)
 	alumnos.PUT("/:id", alumnoHandler.Update)
 	alumnos.DELETE("/:id", alumnoHandler.Delete)
 	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)

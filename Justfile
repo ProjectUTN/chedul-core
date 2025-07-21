@@ -5,10 +5,10 @@ _default:
   @just --list
 
 api build_flag="": build
-    docker compose up {{ if build_flag == "rebuild" { "--build" } else { "" } }}
+  docker compose up {{ if build_flag == "rebuild" { "--build" } else { "" } }}
 
-watch:
-    watchexec -r -e go -- just api rebuild
+watch short="":
+  watchexec -r -e go -- just test {{ if short == "short" { "short" } else { "" } }}
 
 build: fmt lint
   go mod tidy
@@ -35,13 +35,8 @@ down:
 reset:
   GOOSE_DRIVER=postgres GOOSE_DBSTRING={{GOOSE_DBSTRING}} goose -dir={{MIGRATION_PATH}} reset
 
-postgres:
-  bash ./scripts/spawn_postgres.sh
-  
+test short="" dir="...":
+  CONFIG_DIR=../configuration/ gotestsum --format testname -- {{ if short == "short" { "-short"} else {""} }} ./{{dir}}
 
-kill-db:
-  docker kill chedul-db
-
-test dir="...":
-  CONFIG_DIR=../configuration/ go test -v -cover ./{{dir}}
-
+update_slow_tests:
+  go test -json -short ./... | gotestsum tool slowest --skip-stmt "testing.Short" --threshold 200ms

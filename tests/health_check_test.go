@@ -1,6 +1,7 @@
 package tests
 
 import (
+	api_test "chedul-core/tests/api"
 	"net/http"
 	"testing"
 
@@ -8,10 +9,10 @@ import (
 )
 
 func TestHealthCheckWorks(t *testing.T) {
-	testApp := SpawnApp()
+	testApp := api_test.SpawnAppWithoutDB()
 
 	client := &http.Client{}
-	response, err := client.Get(testApp.address + "/health")
+	response, err := client.Get(testApp.Address + "/health")
 
 	assert.NoError(t, err, "Failed to execute request")
 	defer response.Body.Close()

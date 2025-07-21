@@ -20,21 +20,32 @@ type alumnoRepository struct {
 	db *bun.DB
 }
 
-func (r *alumnoRepository) toDomain(model AlumnoModel) domain.Alumno {
+func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
+	email, err := domain.NewEmail(model.Email)
+	if err != nil {
+		return domain.Alumno{}, err
+	}
+
+	userName, err := domain.NewUserName(model.Nombre)
+
+	if err != nil {
+		return domain.Alumno{}, err
+	}
+
 	return domain.Alumno{
 		ID:       model.ID,
-		Nombre:   model.Nombre,
-		Email:    model.Email,
+		Nombre:   userName,
+		Email:    email,
 		Carrera:  model.Carrera,
 		Password: model.Password,
-	}
+	}, nil
 }
 
 func (r *alumnoRepository) toModel(alumno domain.Alumno) AlumnoModel {
 	return AlumnoModel{
 		ID:       alumno.ID,
-		Nombre:   alumno.Nombre,
-		Email:    alumno.Email,
+		Nombre:   alumno.Nombre.String(),
+		Email:    alumno.Email.String(),
 		Carrera:  alumno.Carrera,
 		Password: alumno.Password,
 	}
@@ -52,7 +63,12 @@ func (r *alumnoRepository) GetAll(ctx context.Context) ([]domain.Alumno, error) 
 
 	result := make([]domain.Alumno, len(model))
 	for i, model := range model {
-		result[i] = r.toDomain(model)
+		res, err := r.toDomain(model)
+		if err != nil {
+			return nil, err
+		}
+
+		result[i] = res
 	}
 
 	return result, nil
@@ -65,7 +81,10 @@ func (r *alumnoRepository) GetByID(ctx context.Context, id int64) (*domain.Alumn
 		return nil, err
 	}
 
-	alumno := r.toDomain(model)
+	alumno, err := r.toDomain(model)
+	if err != nil {
+		return nil, err
+	}
 	return &alumno, nil
 }
 
@@ -76,7 +95,11 @@ func (r *alumnoRepository) GetByEmail(ctx context.Context, email string) (*domai
 		return nil, err
 	}
 
-	alumno := r.toDomain(model)
+	alumno, err := r.toDomain(model)
+	if err != nil {
+		return nil, err
+	}
+
 	return &alumno, nil
 }
 
