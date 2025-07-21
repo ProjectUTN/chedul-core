@@ -42,9 +42,9 @@ func SpawnAppWithDB() TestApp {
 	configuration.Server.Port = 0
 
 	server := server.BuildWithoutDB(configuration)
-	server.ConnPool = TestingDB.db
+	address := server.Echo.Listener.Addr().String()
 
-	address := fmt.Sprintf("127.0.0.1:%d", server.Port)
+	server.ConnPool = TestingDB.db
 
 	go func() {
 		if err := server.Echo.Start(address); err != nil && err != http.ErrServerClosed {
@@ -67,8 +67,7 @@ func SpawnAppWithoutDB() TestApp {
 	configuration.Server.Port = 0
 
 	server := server.BuildWithoutDB(configuration)
-
-	address := fmt.Sprintf("127.0.0.1:%d", server.Port)
+	address := server.Echo.Listener.Addr().String()
 
 	go func() {
 		if err := server.Echo.Start(address); err != nil && err != http.ErrServerClosed {

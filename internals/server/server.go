@@ -40,7 +40,6 @@ type Server struct {
 
 // Usado unicamente para testeos
 func BuildWithoutDB(configuration config.AppConfig) *Server {
-	// TODO: Encontrar una mejora manera de hacer esto
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
@@ -53,11 +52,9 @@ func BuildWithoutDB(configuration config.AppConfig) *Server {
 
 	host := configuration.Server.Host
 	port := listener.Addr().(*net.TCPAddr).Port
-	// FIX: Esto trae una race condition entre que esta funcion devuelve Server y se llama a server.Run()
-	// El puerto puede ser ocupado de imprevisto por otra app
-	listener.Close()
 
 	api := echo.New()
+	api.Listener = listener
 	api.HideBanner = true
 	api.HidePort = true
 	api.HTTPErrorHandler = HttpErrorHandler
@@ -93,11 +90,9 @@ func Build(configuration config.AppConfig) *Server {
 
 	host := configuration.Server.Host
 	port := listener.Addr().(*net.TCPAddr).Port
-	// FIX: Esto trae una race condition entre que esta funcion devuelve Server y se llama a server.Run()
-	// El puerto puede ser ocupado de imprevisto por otra app
-	listener.Close()
 
 	api := echo.New()
+	api.Listener = listener
 	api.HideBanner = true
 	api.HidePort = true
 	api.HTTPErrorHandler = HttpErrorHandler
