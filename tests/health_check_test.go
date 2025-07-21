@@ -2,6 +2,7 @@ package tests
 
 import (
 	api_test "chedul-core/tests/api"
+	"log"
 	"net/http"
 	"testing"
 
@@ -9,7 +10,11 @@ import (
 )
 
 func TestHealthCheckWorks(t *testing.T) {
-	testApp := api_test.SpawnAppWithoutDB()
+	testApp, err := api_test.SpawnApp(api_test.WithDB())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer testApp.Cleanup()
 
 	client := &http.Client{}
 	response, err := client.Get(testApp.Address + "/health")

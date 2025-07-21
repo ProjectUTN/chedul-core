@@ -36,7 +36,7 @@ reset:
   GOOSE_DRIVER=postgres GOOSE_DBSTRING={{GOOSE_DBSTRING}} goose -dir={{MIGRATION_PATH}} reset
 
 test short="" dir="...":
-  CONFIG_DIR=../configuration/ gotestsum --format testname -- {{ if short == "short" { "-short"} else {""} }} ./{{dir}}
+  CONFIG_DIR=../configuration/ gotestsum --format testname --debug -- {{ if short == "short" { "-short"} else {""} }} ./{{dir}}
 
 update_slow_tests:
   go test -json -short ./... | gotestsum tool slowest --skip-stmt "testing.Short" --threshold 200ms

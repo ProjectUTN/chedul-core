@@ -19,7 +19,8 @@ type AlumnoTestSuite struct {
 }
 
 func (s *AlumnoTestSuite) SetupSuite() {
-	testingDB, err := SetupContainer()
+	// TODO: Resolver el tema de que se hardcodee
+	testingDB, err := SetupPgContainer("../../migrations")
 	s.Require().NoError(err)
 
 	s.ctx = context.Background()

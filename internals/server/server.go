@@ -85,7 +85,7 @@ func Build(configuration config.AppConfig) *Server {
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
 	if err != nil {
-		log.Fatal("Fallo al unirse a un puerto aleatorio:", err)
+		log.Fatalf("Fallo al unirse al puerto:%d. err: %s ", configuration.Server.Port, err.Error())
 	}
 
 	host := configuration.Server.Host
