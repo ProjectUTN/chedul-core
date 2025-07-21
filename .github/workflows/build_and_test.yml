@@ -39,6 +39,11 @@ jobs:
         run: |
           docker pull postgres:17-alpine
 
+      # - name: Install Just
+      # - uses: extractions/setup-just@v3
+      #   with:
+      #     just-version: latest  
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -63,4 +68,4 @@ jobs:
         run: go build -v ./...
 
       - name: Run Tests
-        run: go test -v -cover ./...
+        run: CONFIG_DIR=../configuration/ go test -v -cover ./...
