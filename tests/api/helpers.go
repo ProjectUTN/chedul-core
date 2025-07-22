@@ -3,15 +3,18 @@ package api
 import (
 	"chedul-core/internals/server"
 	"chedul-core/pkg/config"
+	"chedul-core/pkg/logger"
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"net"
 	"os"
 	"time"
 
 	"net/http"
 
-	// "github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/pressly/goose"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -69,7 +72,7 @@ func SpawnApp(options ...SpawnOpts) (*TestApp, error) {
 	}
 	configuration.Server.Port = 0
 
-	server := server.BuildWithoutDB(configuration)
+	server := BuildWithoutDB(configuration)
 	server.ConnPool = testDB
 
 	address := server.Echo.Listener.Addr().String()
@@ -124,7 +127,6 @@ type TestingDB struct {
 
 // Interesante considerar esta tecnica en vez de usar testcontainers si prueban ser un cuello de botella cuando tengamos muchos tests.
 // https://gajus.com/blog/setting-up-postgre-sql-for-running-integration-tests
-
 func SetupPgContainer(
 	// TODO: Resolver el tema de que se hardcodee
 	migrationPath string,
@@ -153,8 +155,6 @@ func SetupPgContainer(
 
 	goose.SetDialect("postgres")
 
-	dir, _ := os.Getwd()
-	fmt.Printf("------------------ %v == %v -------------", dir, migrationPath)
 	err = goose.Up(sqldb, migrationPath)
 	if err != nil {
 		return nil, err
@@ -164,4 +164,39 @@ func SetupPgContainer(
 		container: container,
 		db:        db,
 	}, nil
+}
+
+// TODO: Refactorizar para usar el patron Opts, asi podemos definir si cargar el middleware, si cargar la db, etc.
+func BuildWithoutDB(configuration config.AppConfig) *server.Server {
+	logger, err := logger.New(configuration.Server.LogLevel)
+	if err != nil {
+		log.Fatal("Error iniciando logger:", err)
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
+	if err != nil {
+		log.Fatal("Fallo al unirse a un puerto aleatorio:", err)
+	}
+
+	host := configuration.Server.Host
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	api := echo.New()
+	api.Listener = listener
+	api.HideBanner = true
+	api.HidePort = true
+	api.HTTPErrorHandler = server.HttpErrorHandler
+
+	server := server.Server{
+		Echo:     api,
+		Host:     host,
+		Port:     port,
+		ConnPool: nil,
+		Logger:   logger,
+	}
+
+	server.SetupMiddleware()
+	server.SetupRoutes()
+
+	return &server
 }

@@ -1,16 +1,21 @@
 package tests
 
 import (
-	api_test "chedul-core/tests/api"
+	"chedul-core/tests/api"
 	"log"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthCheckWorks(t *testing.T) {
-	testApp, err := api_test.SpawnApp(api_test.WithDB())
+	if os.Getenv("CONFIG_DIR") == "" {
+		t.Skip("env var 'CONFIG_DIR' no inicializada")
+	}
+
+	testApp, err := api.SpawnApp()
 	if err != nil {
 		log.Fatal(err)
 	}

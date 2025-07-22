@@ -4,6 +4,7 @@ import (
 	"chedul-core/internals/domain"
 	"chedul-core/internals/repositories"
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -11,14 +12,14 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type AlumnoTestSuite struct {
+type AlumnoHandlerSuite struct {
 	suite.Suite
 	db        *bun.DB
 	container testcontainers.Container
 	ctx       context.Context
 }
 
-func (s *AlumnoTestSuite) SetupSuite() {
+func (s *AlumnoHandlerSuite) SetupSuite() {
 	// TODO: Resolver el tema de que se hardcodee
 	testingDB, err := SetupPgContainer("../../migrations")
 	s.Require().NoError(err)
@@ -28,7 +29,7 @@ func (s *AlumnoTestSuite) SetupSuite() {
 	s.db = testingDB.db
 }
 
-func (s *AlumnoTestSuite) TearDownSuite() {
+func (s *AlumnoHandlerSuite) TearDownSuite() {
 	if s.db != nil {
 		s.db.Close()
 	}
@@ -37,12 +38,12 @@ func (s *AlumnoTestSuite) TearDownSuite() {
 	}
 }
 
-func (s *AlumnoTestSuite) SetupTest() {
+func (s *AlumnoHandlerSuite) SetupTest() {
 	s.cleanDatabase()
 	s.seedDatabase()
 }
 
-func (s *AlumnoTestSuite) cleanDatabase() {
+func (s *AlumnoHandlerSuite) cleanDatabase() {
 	if s.db == nil {
 		s.T().Fatal("Database connection is nil")
 		return
@@ -54,7 +55,7 @@ func (s *AlumnoTestSuite) cleanDatabase() {
 	s.db.Exec("ALTER SEQUENCE carrera_id_seq RESTART WITH 1")
 }
 
-func (s *AlumnoTestSuite) seedDatabase() {
+func (s *AlumnoHandlerSuite) seedDatabase() {
 	if s.db == nil {
 		s.T().Fatal("Database connection is nil")
 		return
@@ -63,7 +64,7 @@ func (s *AlumnoTestSuite) seedDatabase() {
 	s.Require().NoError(err)
 }
 
-func (s *AlumnoTestSuite) createTestAlumno(name, email string) domain.Alumno {
+func (s *AlumnoHandlerSuite) createTestAlumno(name, email string) domain.Alumno {
 	username, err := domain.NewUserName(name)
 	s.Require().NoError(err)
 
@@ -78,7 +79,8 @@ func (s *AlumnoTestSuite) createTestAlumno(name, email string) domain.Alumno {
 	}
 }
 
-func (s *AlumnoTestSuite) TestGetAlumnoById() {
+// TODO: Refactorizar esto para probar los handlers no el repositorio.
+func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	repo := repositories.NewAlumnoRepository(s.db)
 
 	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
@@ -90,7 +92,7 @@ func (s *AlumnoTestSuite) TestGetAlumnoById() {
 	s.assertAlumnoEquals(alumno, *result)
 }
 
-func (s *AlumnoTestSuite) TestGetAlumnoByEmail() {
+func (s *AlumnoHandlerSuite) TestGetAlumnoByEmail() {
 	repo := repositories.NewAlumnoRepository(s.db)
 	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
 	err := repo.Create(s.ctx, &alumno)
@@ -101,7 +103,7 @@ func (s *AlumnoTestSuite) TestGetAlumnoByEmail() {
 	s.Assert().Equal(alumno.Email, result.Email)
 }
 
-func (s *AlumnoTestSuite) assertAlumnoEquals(expected, actual domain.Alumno) {
+func (s *AlumnoHandlerSuite) assertAlumnoEquals(expected, actual domain.Alumno) {
 	s.Assert().Equal(expected.Password, actual.Password)
 	s.Assert().Equal(expected.Carrera, actual.Carrera)
 	s.Assert().Equal(expected.Nombre, actual.Nombre)
@@ -113,5 +115,9 @@ func TestAlumnoSuite(t *testing.T) {
 		t.Skip("too slow for testing.Short")
 	}
 
-	suite.Run(t, new(AlumnoTestSuite))
+	if os.Getenv("CONFIG_DIR") == "" {
+		t.Skip("env var 'CONFIG_DIR' no inicializada")
+	}
+
+	suite.Run(t, new(AlumnoHandlerSuite))
 }

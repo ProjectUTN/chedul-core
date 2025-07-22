@@ -38,40 +38,6 @@ type Server struct {
 	Logger    *zap.Logger
 }
 
-// Usado unicamente para testeos
-func BuildWithoutDB(configuration config.AppConfig) *Server {
-	logger, err := logger.New(configuration.Server.LogLevel)
-	if err != nil {
-		log.Fatal("Error iniciando logger:", err)
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
-	if err != nil {
-		log.Fatal("Fallo al unirse a un puerto aleatorio:", err)
-	}
-
-	host := configuration.Server.Host
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	api := echo.New()
-	api.Listener = listener
-	api.HideBanner = true
-	api.HidePort = true
-	api.HTTPErrorHandler = HttpErrorHandler
-
-	server := Server{
-		Echo:     api,
-		Host:     host,
-		Port:     port,
-		ConnPool: nil,
-		Logger:   logger,
-	}
-	server.setupMiddleware()
-	server.setupRoutes()
-
-	return &server
-}
-
 func Build(configuration config.AppConfig) *Server {
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
@@ -104,8 +70,8 @@ func Build(configuration config.AppConfig) *Server {
 		ConnPool: connPool,
 		Logger:   logger,
 	}
-	server.setupMiddleware()
-	server.setupRoutes()
+	server.SetupMiddleware()
+	server.SetupRoutes()
 
 	return &server
 }
@@ -162,13 +128,13 @@ func (s *Server) Run() error {
 	return nil
 }
 
-func (s *Server) setupMiddleware() {
+func (s *Server) SetupMiddleware() {
 	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-service"))
 	s.Echo.Use(CORSMiddleware())
 	s.Echo.Use(RecoverMiddleware(s.Logger))
 }
 
-func (s *Server) setupRoutes() {
+func (s *Server) SetupRoutes() {
 	s.Echo.GET("/health", func(c echo.Context) error {
 		return c.NoContent(http.StatusNoContent)
 	})
