@@ -35,8 +35,45 @@ down:
 reset:
   GOOSE_DRIVER=postgres GOOSE_DBSTRING={{GOOSE_DBSTRING}} goose -dir={{MIGRATION_PATH}} reset
 
-test short="" dir="...":
-  CONFIG_DIR=../configuration/ gotestsum --format testname --debug -- {{ if short == "short" { "-short"} else {""} }} ./{{dir}}
+test *args:
+  #!/usr/bin/env bash
+  set -euo pipefail
+  
+  watch_mode=false
+  short_mode=false
+  dir="..."
+  
+  args_array=({{args}})
+  
+  for arg in "${args_array[@]}"; do
+    case "$arg" in
+      "watch")
+        watch_mode=true
+        ;;
+      "short")
+        short_mode=true
+        ;;
+      *)
+        dir="$arg"
+        ;;
+    esac
+  done
+  
+  test_cmd="CONFIG_DIR=../configuration/ gotestsum --format testname --debug --"
+  
+  if [ "$short_mode" = true ]; then
+    test_cmd="$test_cmd -short"
+  fi
+  
+  test_cmd="$test_cmd ./$dir"
+  
+  if [ "$watch_mode" = true ]; then
+    echo "Running tests in watch mode..."
+    watchexec -r -e go -- $test_cmd
+  else
+    echo "Running tests..."
+    eval $test_cmd
+  fi
 
 update_slow_tests:
   go test -json -short ./... | gotestsum tool slowest --skip-stmt "testing.Short" --threshold 200ms
