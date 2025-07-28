@@ -10,7 +10,3 @@ type Condicion struct {
 type CondicionRepository interface {
 	GetAll(ctx context.Context) ([]Condicion, error)
 }
-
-type CondicionService interface {
-	GetAll(ctx context.Context) ([]Condicion, error)
-}

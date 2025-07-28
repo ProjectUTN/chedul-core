@@ -10,21 +10,21 @@ import (
 )
 
 type CuatrimestreHandler struct {
-	service domain.CuatrimestreService
-	logger  *zap.Logger
+	repo   domain.CuatrimestreRepository
+	logger *zap.Logger
 }
 
-func NewCuatrimestreHandler(service domain.CuatrimestreService, logger *zap.Logger) *CuatrimestreHandler {
+func NewCuatrimestreHandler(repo domain.CuatrimestreRepository, logger *zap.Logger) *CuatrimestreHandler {
 	return &CuatrimestreHandler{
-		service: service,
-		logger:  logger,
+		repo:   repo,
+		logger: logger,
 	}
 }
 
 func (h *CuatrimestreHandler) GetAll(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	cuatrimestres, err := h.service.GetAll(ctx)
+	cuatrimestres, err := h.repo.GetAll(ctx)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (h *CuatrimestreHandler) GetByID(c echo.Context) error {
 		return err
 	}
 
-	cuatrimestre, err := h.service.GetByID(ctx, id)
+	cuatrimestre, err := h.repo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}

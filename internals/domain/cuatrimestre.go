@@ -18,8 +18,3 @@ type CuatrimestreRepository interface {
 	GetByID(ctx context.Context, id int64) (*Cuatrimestre, error)
 	GetByNombre(ctx context.Context, nombre string) (*Cuatrimestre, error)
 }
-
-type CuatrimestreService interface {
-	GetAll(ctx context.Context) ([]Cuatrimestre, error)
-	GetByID(ctx context.Context, id int64) (*Cuatrimestre, error)
-}

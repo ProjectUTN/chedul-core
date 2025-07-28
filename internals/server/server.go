@@ -125,6 +125,7 @@ func (s *Server) setupRoutes() {
 	materiaRepo := repositories.NewMateriaRepository(s.db)
 	condicionRepo := repositories.NewCondicionRepository(s.db)
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
+	cuatrimestreRepo := repositories.NewCuatrimestreRepository(s.db)
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger, s.config)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
@@ -132,6 +133,7 @@ func (s *Server) setupRoutes() {
 	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.logger)
 	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandle(condicionAlumnoRepo, s.logger)
 	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, condicionAlumnoRepo, condicionRepo, s.db)
+	cuatrimestreHandler := handlers.NewCuatrimestreHandler(cuatrimestreRepo, s.logger)
 
 	api := s.echo.Group("/api/v1")
 
@@ -165,4 +167,8 @@ func (s *Server) setupRoutes() {
 	condicion_alumno := api.Group("/condicion_alumno")
 	condicion_alumno.GET("/:id", condicionAlumnoHandler.GetCondicionPorAlumno)
 	condicion_alumno.POST("", condicionAlumnoHandler.SetCondicionAlumno)
+
+	cuatrimestre := api.Group("/cuatrimestres")
+	cuatrimestre.GET("", cuatrimestreHandler.GetAll)
+	cuatrimestre.GET("/:id", cuatrimestreHandler.GetByID)
 }

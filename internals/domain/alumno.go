@@ -84,14 +84,6 @@ type AlumnoRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
-type AlumnoService interface {
-	GetAll(ctx context.Context) ([]Alumno, error)
-	GetByID(ctx context.Context, id int64) (*Alumno, error)
-	Create(ctx context.Context, req AlumnoRequest) (*Alumno, error)
-	Update(ctx context.Context, id int64, req AlumnoRequest) (*Alumno, error)
-	Delete(ctx context.Context, id int64) error
-}
-
 type alumnoEmail string
 
 func newAlumnoEmail(s string) (alumnoEmail, error) {
