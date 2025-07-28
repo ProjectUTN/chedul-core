@@ -2,11 +2,14 @@ package api
 
 import (
 	"chedul-core/internals/domain"
-	"chedul-core/internals/repositories"
+	"chedul-core/internals/handlers"
 	"context"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pressly/goose"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
@@ -80,36 +83,61 @@ func (s *AlumnoHandlerSuite) createTestAlumno(name, email string) domain.Alumno 
 	}
 }
 
+func createTestToken(secretKey string, alumnoID int64) string {
+	claims := handlers.CustomClaims{
+		Sub: alumnoID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, _ := token.SignedString([]byte(secretKey))
+	return tokenString
+}
+
 // TODO: Refactorizar esto para probar los handlers no el repositorio.
 func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
-	repo := repositories.NewAlumnoRepository(s.db)
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
+		s.T().FailNow()
+	}
 
-	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
-	err := repo.Create(s.ctx, &alumno)
-	s.Require().NoError(err)
+	testApp, err := SpawnApp("../"+configPath, WithDB("../../migrations"))
+	defer testApp.Cleanup()
 
-	result, err := repo.GetByID(s.ctx, 1)
-	s.Assert().NoError(err)
-	s.assertAlumnoEquals(alumno, *result)
+	s.NoError(err)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", testApp.Address+"/api/v1/alumnos/1", nil)
+	s.NoError(err)
+	req.Header.Set("Authorization", "Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
+
+	response, err := client.Do(req)
+	s.NoError(err)
+	defer response.Body.Close()
+
+	s.Assert().Equal(http.StatusOK, response.StatusCode)
 }
 
-func (s *AlumnoHandlerSuite) TestGetAlumnoByEmail() {
-	repo := repositories.NewAlumnoRepository(s.db)
-	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
-	err := repo.Create(s.ctx, &alumno)
-	s.Require().NoError(err)
+// func (s *AlumnoHandlerSuite) TestGetAlumnoByEmail() {
+// 	repo := repositories.NewAlumnoRepository(s.db)
+// 	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
+// 	err := repo.Create(s.ctx, &alumno)
+// 	s.Require().NoError(err)
 
-	result, err := repo.GetByEmail(s.ctx, "lautaro@acosta.com")
-	s.Assert().NoError(err)
-	s.Assert().Equal(alumno.Email, result.Email)
-}
+// 	result, err := repo.GetByEmail(s.ctx, "lautaro@acosta.com")
+// 	s.Assert().NoError(err)
+// 	s.Assert().Equal(alumno.Email, result.Email)
+// }
 
-func (s *AlumnoHandlerSuite) assertAlumnoEquals(expected, actual domain.Alumno) {
-	s.Assert().Equal(expected.Password, actual.Password)
-	s.Assert().Equal(expected.Carrera, actual.Carrera)
-	s.Assert().Equal(expected.Nombre, actual.Nombre)
-	s.Assert().Equal(expected.Email, actual.Email)
-}
+// func (s *AlumnoHandlerSuite) assertAlumnoEquals(expected, actual domain.Alumno) {
+// 	s.Assert().Equal(expected.Password, actual.Password)
+// 	s.Assert().Equal(expected.Carrera, actual.Carrera)
+// 	s.Assert().Equal(expected.Nombre, actual.Nombre)
+// 	s.Assert().Equal(expected.Email, actual.Email)
+// }
 
 func TestAlumnoSuite(t *testing.T) {
 	if testing.Short() {

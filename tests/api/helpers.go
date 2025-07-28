@@ -39,18 +39,20 @@ func (t *TestApp) Cleanup() error {
 }
 
 type spawnOptions struct {
-	withDB bool
+	withDB         bool
+	migrationsPath string
 }
 
 type SpawnOpts func(*spawnOptions)
 
-func WithDB() SpawnOpts {
+func WithDB(migrationsPath string) SpawnOpts {
 	return func(so *spawnOptions) {
 		so.withDB = true
+		so.migrationsPath = migrationsPath
 	}
 }
 
-func SpawnApp(options ...SpawnOpts) (*TestApp, error) {
+func SpawnApp(configPath string, options ...SpawnOpts) (*TestApp, error) {
 	opts := &spawnOptions{}
 	for _, opt := range options {
 		opt(opts)
@@ -58,14 +60,14 @@ func SpawnApp(options ...SpawnOpts) (*TestApp, error) {
 
 	var testDB *bun.DB
 	if opts.withDB {
-		TestingDB, err := SetupPgContainer("../migrations")
+		TestingDB, err := SetupPgContainer(opts.migrationsPath)
 		if err != nil {
 			return nil, fmt.Errorf("No se pudo iniciar base de datos de prueba %w", err)
 		}
 		testDB = TestingDB.db
 	}
 
-	configuration, err := config.Load()
+	configuration, err := config.Load(configPath)
 	if err != nil {
 		dir, _ := os.Getwd()
 		return nil, fmt.Errorf("No se pudo leer la configuracion: %v", dir)
@@ -188,11 +190,12 @@ func BuildWithoutDB(configuration config.AppConfig) *server.Server {
 	api.HTTPErrorHandler = server.HttpErrorHandler
 
 	server := server.Server{
-		Echo:     api,
-		Host:     host,
-		Port:     port,
-		ConnPool: nil,
-		Logger:   logger,
+		Echo:      api,
+		Host:      host,
+		JwtSecret: *configuration.JwtSecret,
+		Port:      port,
+		ConnPool:  nil,
+		Logger:    logger,
 	}
 
 	server.SetupMiddleware()

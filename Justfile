@@ -68,10 +68,10 @@ test *args:
   test_cmd="$test_cmd ./$dir"
   
   if [ "$watch_mode" = true ]; then
-    echo "Running tests in watch mode..."
+    echo -e "\e[1;32m$test_cmd\e[0m"    
     watchexec -r -e go -- $test_cmd
   else
-    echo "Running tests..."
+    echo -e "\e[1;32m$test_cmd\e[0m"   
     eval $test_cmd
   fi
 

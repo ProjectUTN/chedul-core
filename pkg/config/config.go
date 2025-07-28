@@ -163,11 +163,7 @@ func (c *AppConfig) validate() error {
 	return nil
 }
 
-func Load() (AppConfig, error) {
-	configDir := os.Getenv("CONFIG_DIR")
-	if configDir == "" {
-		return AppConfig{}, fmt.Errorf("'CONFIG_DIR' no esta configurado")
-	}
+func Load(configDir string) (AppConfig, error) {
 
 	viper.SetConfigFile(configDir + "base.yml")
 

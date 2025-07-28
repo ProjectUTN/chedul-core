@@ -11,14 +11,16 @@ import (
 )
 
 func TestHealthCheckWorks(t *testing.T) {
-	if os.Getenv("CONFIG_DIR") == "" {
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
 		t.Skip("env var 'CONFIG_DIR' no inicializada")
 	}
 
-	testApp, err := api.SpawnApp()
+	testApp, err := api.SpawnApp(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer testApp.Cleanup()
 
 	client := &http.Client{}

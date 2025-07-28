@@ -4,10 +4,16 @@ import (
 	"chedul-core/internals/server"
 	"chedul-core/pkg/config"
 	"log"
+	"os"
 )
 
 func main() {
-	configuration, err := config.Load()
+	configDir := os.Getenv("CONFIG_DIR")
+	if configDir == "" {
+		log.Fatal("'CONFIG_DIR' no esta configurado")
+	}
+
+	configuration, err := config.Load(configDir)
 	if err != nil {
 		log.Fatal("No se pudo leer la configuracion")
 	}

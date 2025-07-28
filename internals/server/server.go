@@ -64,11 +64,12 @@ func Build(configuration config.AppConfig) *Server {
 	api.HTTPErrorHandler = HttpErrorHandler
 
 	server := Server{
-		Echo:     api,
-		Host:     host,
-		Port:     port,
-		ConnPool: connPool,
-		Logger:   logger,
+		Echo:      api,
+		Host:      host,
+		JwtSecret: *configuration.JwtSecret,
+		Port:      port,
+		ConnPool:  connPool,
+		Logger:    logger,
 	}
 	server.SetupMiddleware()
 	server.SetupRoutes()
