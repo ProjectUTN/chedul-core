@@ -7,10 +7,13 @@ import (
 	"os"
 	"testing"
 
+	"github.com/pressly/goose"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/uptrace/bun"
 )
+
+var MIGRATIONS_DIR string = "../../migrations"
 
 type AlumnoHandlerSuite struct {
 	suite.Suite
@@ -21,7 +24,7 @@ type AlumnoHandlerSuite struct {
 
 func (s *AlumnoHandlerSuite) SetupSuite() {
 	// TODO: Resolver el tema de que se hardcodee
-	testingDB, err := SetupPgContainer("../../migrations")
+	testingDB, err := SetupPgContainer(MIGRATIONS_DIR)
 	s.Require().NoError(err)
 
 	s.ctx = context.Background()
@@ -49,10 +52,8 @@ func (s *AlumnoHandlerSuite) cleanDatabase() {
 		return
 	}
 
-	s.db.Exec("DELETE FROM alumno")
-	s.db.Exec("DELETE FROM carrera")
-	s.db.Exec("ALTER SEQUENCE alumno_id_seq RESTART WITH 1")
-	s.db.Exec("ALTER SEQUENCE carrera_id_seq RESTART WITH 1")
+	goose.Reset(s.db.DB, MIGRATIONS_DIR)
+	goose.Up(s.db.DB, MIGRATIONS_DIR)
 }
 
 func (s *AlumnoHandlerSuite) seedDatabase() {
