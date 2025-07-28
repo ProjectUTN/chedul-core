@@ -18,15 +18,15 @@ type AlumnoHandler struct {
 	alumnoRepo  domain.AlumnoRepository
 	carreraRepo domain.CarreraRepository
 	logger      *zap.Logger
-	appConfig   *config.AppConfig
+	jwtToken    config.Secret
 }
 
-func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, cfg *config.AppConfig) *AlumnoHandler {
+func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, jwtSecret config.Secret) *AlumnoHandler {
 	return &AlumnoHandler{
 		alumnoRepo:  alumnoRepo,
 		logger:      logger,
 		carreraRepo: carreraRepo,
-		appConfig:   cfg,
+		jwtToken:    jwtSecret,
 	}
 }
 
@@ -57,42 +57,6 @@ func (h *AlumnoHandler) GetByID(c echo.Context) error {
 	return c.JSON(http.StatusOK, alumno)
 }
 
-func (h *AlumnoHandler) Create(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	var req domain.AlumnoRequest
-	if err := c.Bind(&req); err != nil {
-		return InvalidJSON()
-	}
-
-	if errors := req.Validate(); len(errors) > 0 {
-		return InvalidRequestData(errors)
-	}
-
-	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		// TODO: Cambiar el error
-		return InvalidJSON()
-	}
-
-	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
-	if err != nil {
-		// TODO: Cambiar el error
-		return InvalidJSON()
-	}
-
-	alumno := &domain.Alumno{
-		Nombre:  strings.TrimSpace(req.Nombre),
-		Email:   strings.ToLower(strings.TrimSpace(req.Email)),
-		Carrera: carrera.ID,
-	}
-
-	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusCreated, alumno)
-}
-
 func (h *AlumnoHandler) SignUp(c echo.Context) error {
 	ctx := c.Request().Context()
 	var req domain.SignUpRequest
@@ -101,32 +65,22 @@ func (h *AlumnoHandler) SignUp(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
+	alumno, errors := req.Validate()
+	if len(errors) > 0 {
 		return InvalidRequestData(errors)
 	}
 
 	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas, Correo ya existente"})
 	}
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
 	}
+	alumno.Carrera = carrera.ID
 
-	hashedPassword, err := HashPassword(req.Password)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error al encriptar la contraseña"})
-	}
-
-	alumno := &domain.Alumno{
-		Nombre:   req.Nombre,
-		Email:    strings.ToLower(req.Email),
-		Carrera:  carrera.ID,
-		Password: hashedPassword,
-	}
-
-	if err := h.alumnoRepo.Create(ctx, alumno); err != nil {
+	if err := h.alumnoRepo.Create(ctx, &alumno); err != nil {
 		return err
 	}
 
@@ -155,7 +109,7 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
 	}
 
-	jwtSecret := h.appConfig.JwtSecret.Expose()
+	jwtSecret := h.jwtToken.Expose()
 	if jwtSecret == "" {
 		h.logger.Error("LogIn: JwtSecret no configurado")
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error de configuración del servidor"})
@@ -178,16 +132,16 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 	refreshTokenCookie.Value = refreshToken
 	refreshTokenCookie.Path = "/"
 	refreshTokenCookie.Expires = time.Now().Add(30 * 24 * time.Hour)
-	refreshTokenCookie.Secure = h.appConfig.IsProd()
+	refreshTokenCookie.Secure = config.IsProd()
 	refreshTokenCookie.HttpOnly = true
 	refreshTokenCookie.SameSite = http.SameSiteLaxMode
 	c.SetCookie(refreshTokenCookie)
 
 	h.logger.Info("LogIn: Autenticación exitosa", zap.Int64("alumno_id", alumno.ID), zap.String("email", email))
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
+	return c.JSON(http.StatusOK, map[string]any{
 		"accessToken": accessToken,
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"id":     alumno.ID,
 			"nombre": alumno.Nombre,
 			"email":  alumno.Email,
@@ -204,9 +158,9 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 	}
 
 	refreshTokenString := refreshTokenCookie.Value
-	jwtSecret := h.appConfig.JwtSecret.Expose()
+	jwtSecret := h.jwtToken.Expose()
 
-	token, err := jwt.ParseWithClaims(refreshTokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(refreshTokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			h.logger.Error("RefreshToken: Método de firma inesperado para refresh token", zap.Any("alg", token.Header["alg"]))
 			return nil, fmt.Errorf("método de firma inesperado")
@@ -223,7 +177,7 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 			Path:     "/",
 			Expires:  time.Unix(0, 0),
 			HttpOnly: true,
-			Secure:   h.appConfig.IsProd(),
+			Secure:   config.IsProd(),
 			SameSite: http.SameSiteLaxMode,
 		})
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Refresh Token inválido o expirado. Por favor, inicie sesión de nuevo."})
@@ -273,7 +227,12 @@ func (h *AlumnoHandler) Update(c echo.Context) error {
 		// TODO: Mejorar el error
 		return InvalidJSON()
 	}
-	alumno.Email = req.Email
+
+	email, err := domain.NewEmail(req.Email)
+	if err != nil {
+		return err
+	}
+	alumno.Email = email
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {

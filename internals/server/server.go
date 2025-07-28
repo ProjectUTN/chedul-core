@@ -4,8 +4,13 @@ import (
 	"chedul-core/internals/handlers"
 	"chedul-core/internals/repositories"
 	"chedul-core/pkg/config"
+	"chedul-core/pkg/db"
+	"net"
+
+	"chedul-core/pkg/logger"
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,27 +30,54 @@ const (
 )
 
 type Server struct {
-	echo   *echo.Echo
-	config *config.AppConfig
-	db     *bun.DB
-	logger *zap.Logger
+	Echo      *echo.Echo
+	Host      string
+	Port      int
+	JwtSecret config.Secret
+	ConnPool  *bun.DB
+	Logger    *zap.Logger
 }
 
-func New(cfg *config.AppConfig, db *bun.DB, logger *zap.Logger) *Server {
+func Build(configuration config.AppConfig) *Server {
+	logger, err := logger.New(configuration.Server.LogLevel)
+	if err != nil {
+		log.Fatal("Error iniciando logger:", err)
+	}
+
+	connPool, err := db.Open(&configuration)
+	if err != nil {
+		logger.Fatal("Error al conectar con la DB", zap.Error(err))
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
+	if err != nil {
+		log.Fatalf("Fallo al unirse al puerto:%d. err: %s ", configuration.Server.Port, err.Error())
+	}
+
+	host := configuration.Server.Host
+	port := listener.Addr().(*net.TCPAddr).Port
+
 	api := echo.New()
+	api.Listener = listener
 	api.HideBanner = true
 	api.HidePort = true
 	api.HTTPErrorHandler = HttpErrorHandler
 
-	return &Server{
-		echo:   api,
-		config: cfg,
-		db:     db,
-		logger: logger,
+	server := Server{
+		Echo:      api,
+		Host:      host,
+		JwtSecret: *configuration.JwtSecret,
+		Port:      port,
+		ConnPool:  connPool,
+		Logger:    logger,
 	}
-}
-func (s *Server) printBanner() {
+	server.SetupMiddleware()
+	server.SetupRoutes()
 
+	return &server
+}
+
+func (s *Server) printBanner() {
 	if fileInfo, _ := os.Stdout.Stat(); (fileInfo.Mode() & os.ModeCharDevice) != 0 {
 		fmt.Print(Cyan)
 	}
@@ -63,27 +95,19 @@ func (s *Server) printBanner() {
 	}
 }
 
-func (s *Server) Address() string {
-	return fmt.Sprintf("%s:%d", s.config.Server.Host, s.config.Server.Port)
-}
-
-func (s *Server) Start() error {
-	s.setupMiddleware()
-	s.setupRoutes()
-
+func (s *Server) Run() error {
 	go func() {
 		s.printBanner()
-		s.config.PrettyPrint()
-
-		address := s.Address()
+		address := fmt.Sprintf("%s:%d", s.Host, s.Port)
 
 		fmt.Println()
+		fmt.Printf("%sPerfil:%s %s%s%s\n", Bold, Reset, Bold+Green, config.GetServerEnv(), Reset)
 		fmt.Println(Bold + "Server en:" + Reset)
-		fmt.Printf("  %sLocal%s:   %shttp://%s%s\n", Bold+Green, Reset, Bold+Cyan, address, Reset)
+		fmt.Printf("  %sLocal%s:   %shttp://127.0.0.1:%d%s\n", Bold+Green, Reset, Bold+Cyan, s.Port, Reset)
 		fmt.Println()
 
-		if err := s.echo.Start(address); err != nil && err != http.ErrServerClosed {
-			s.logger.Fatal("failed to start server", zap.Error(err))
+		if err := s.Echo.Start(address); err != nil && err != http.ErrServerClosed {
+			s.Logger.Fatal("Fallo al iniciar servidor", zap.Error(err))
 		}
 	}()
 
@@ -91,62 +115,56 @@ func (s *Server) Start() error {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 
-	s.logger.Info("SIGTERM detectado, cerrando el servidor...")
+	s.Logger.Info("SIGTERM detectado, cerrando el servidor...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := s.echo.Shutdown(ctx); err != nil {
-		s.logger.Error("Interrupcion al cerrar el servidor", zap.Error(err))
+	if err := s.Echo.Shutdown(ctx); err != nil {
+		s.Logger.Error("Interrupcion al cerrar el servidor", zap.Error(err))
 		return err
 	}
 
-	s.logger.Info("Cierre del servidor completado")
+	s.Logger.Info("Cierre del servidor completado")
 	return nil
 }
 
-func (s *Server) setupMiddleware() {
-	s.echo.Use(CORSMiddleware())
-	s.echo.Use(RecoverMiddleware(s.logger))
-	s.echo.Use(TracingMiddleware(s.logger, "chedul-service"))
-
+func (s *Server) SetupMiddleware() {
+	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-service"))
+	s.Echo.Use(CORSMiddleware())
+	s.Echo.Use(RecoverMiddleware(s.Logger))
 }
 
-func (s *Server) setupRoutes() {
-	s.echo.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{
-			"statusCode": http.StatusOK,
-			"msg":        "Servicio activo",
-		})
+func (s *Server) SetupRoutes() {
+	s.Echo.GET("/health", func(c echo.Context) error {
+		return c.NoContent(http.StatusNoContent)
 	})
 
-	alumnoRepo := repositories.NewAlumnoRepository(s.db)
-	carreraRepo := repositories.NewCarreraRepository(s.db)
-	materiaRepo := repositories.NewMateriaRepository(s.db)
-	condicionRepo := repositories.NewCondicionRepository(s.db)
-	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.db)
+	alumnoRepo := repositories.NewAlumnoRepository(s.ConnPool)
+	carreraRepo := repositories.NewCarreraRepository(s.ConnPool)
+	materiaRepo := repositories.NewMateriaRepository(s.ConnPool)
+	condicionRepo := repositories.NewCondicionRepository(s.ConnPool)
+	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.ConnPool)
 
-	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.logger, s.config)
-	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.logger)
-	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.logger)
-	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.logger)
-	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandle(condicionAlumnoRepo, s.logger)
-	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, condicionAlumnoRepo, condicionRepo, s.db)
+	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret)
+	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.Logger)
+	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.Logger)
+	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.Logger)
+	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandle(condicionAlumnoRepo, s.Logger)
+	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, condicionAlumnoRepo, condicionRepo, s.ConnPool)
 
-	api := s.echo.Group("/api/v1")
+	api := s.Echo.Group("/api/v1")
 
 	api.POST("/signup", alumnoHandler.SignUp)
 	api.POST("/login", alumnoHandler.LogIn)
 	api.POST("/refresh-token", alumnoHandler.RefreshToken)
 
-	// TODO: agregar proteccion de rutas a aquellas que lo requieran
 	protectedAPI := api.Group("")
-	protectedAPI.Use(RequireAuthMiddleware(s.config.JwtSecret.Expose(), s.logger))
+	protectedAPI.Use(RequireAuthMiddleware(s.JwtSecret.Expose(), s.Logger))
 
 	alumnos := protectedAPI.Group("/alumnos")
 	alumnos.GET("", alumnoHandler.GetAll)
 	alumnos.GET("/:id", alumnoHandler.GetByID)
-	alumnos.POST("", alumnoHandler.Create)
 	alumnos.PUT("/:id", alumnoHandler.Update)
 	alumnos.DELETE("/:id", alumnoHandler.Delete)
 	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)

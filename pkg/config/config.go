@@ -42,11 +42,12 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string  `json:"host"`
-	Port     int     `json:"port"`
-	User     string  `json:"user"`
-	Password *Secret `json:"password"`
-	Name     string  `json:"name"`
+	Host       string  `json:"host"`
+	Port       int     `json:"port"`
+	User       string  `json:"user"`
+	Password   *Secret `json:"password"`
+	Name       string  `json:"name"`
+	RequireSsl bool    `json:"require_ssl" mapstructure:"require_ssl"`
 }
 
 type Duration time.Duration
@@ -84,6 +85,25 @@ func DefaultConnectionConfig() *ConnectionConfig {
 	}
 }
 
+func DefaultAppConfig() *AppConfig {
+	return &AppConfig{
+		Server: ServerConfig{
+			Host:     "0.0.0.0",
+			Port:     8080,
+			LogLevel: zapcore.InfoLevel,
+			Pool:     DefaultConnectionConfig(),
+		},
+		Database: DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "postgres",
+			Password: &Secret{value: "password"},
+			Name:     "appdb",
+		},
+		JwtSecret: &Secret{value: "changeme"},
+	}
+}
+
 func (c *AppConfig) PrettyPrint() {
 	var obj map[string]any
 	tmp, _ := json.Marshal(c)
@@ -110,7 +130,7 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 func (c *AppConfig) validate() error {
 	var errs []error
 
-	env := getServerEnv()
+	env := GetServerEnv()
 	if !allowedEnvs[env] {
 		errs = append(errs, fmt.Errorf("env invalido %q: debe ser development, test o production", env))
 	}
@@ -143,20 +163,20 @@ func (c *AppConfig) validate() error {
 	return nil
 }
 
-func Load() (*AppConfig, error) {
-	configDir := "configuration/"
+func Load(configDir string) (AppConfig, error) {
+
 	viper.SetConfigFile(configDir + "base.yml")
 
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("Error leyendo el archivo de configuracion: %w", err)
+		return AppConfig{}, fmt.Errorf("Error leyendo el archivo de configuracion: %w", err)
 	}
 
-	env := getServerEnv()
+	env := GetServerEnv()
 	envConfig := configDir + fmt.Sprintf("%s.yml", env)
 	if _, err := os.Stat(envConfig); err == nil {
 		viper.SetConfigFile(envConfig)
 		if err := viper.MergeInConfig(); err != nil {
-			return nil, fmt.Errorf("Error leyendo el archivo de configuracion para %s: %w", env, err)
+			return AppConfig{}, fmt.Errorf("Error leyendo el archivo de configuracion para %s: %w", env, err)
 		}
 	}
 
@@ -168,18 +188,18 @@ func Load() (*AppConfig, error) {
 			SecretDecodeHook(),
 		)
 	}); err != nil {
-		return nil, fmt.Errorf("No se pudo decodificar la configuracion: %w", err)
+		return AppConfig{}, fmt.Errorf("No se pudo decodificar la configuracion: %w", err)
 	}
 
 	if err := config.overrideWithEnv().validate(); err != nil {
-		return nil, err
+		return AppConfig{}, err
 	}
 
 	if config.Server.Pool == nil {
 		config.Server.Pool = DefaultConnectionConfig()
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 func (self *AppConfig) DatabaseUrl() string {
@@ -192,8 +212,8 @@ func (self *AppConfig) DatabaseUrl() string {
 	)
 }
 
-func (self *AppConfig) IsProd() bool {
-	return getServerEnv() == "production"
+func IsProd() bool {
+	return GetServerEnv() == "production"
 }
 
 func logLevelDecodeHook() mapstructure.DecodeHookFunc {
@@ -233,7 +253,7 @@ func durationDecodeHook() mapstructure.DecodeHookFunc {
 	}
 }
 
-func getServerEnv() string {
+func GetServerEnv() string {
 	env := os.Getenv("SERVER_ENV")
 	if env == "" {
 		env = "development"

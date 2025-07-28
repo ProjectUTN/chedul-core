@@ -23,6 +23,7 @@ COPY --from=builder /app/configuration /configuration
 COPY --from=builder /app/main /main
 
 USER 1000
+ENV CONFIG_DIR=configuration/
 
 ENTRYPOINT ["/main"]
 
