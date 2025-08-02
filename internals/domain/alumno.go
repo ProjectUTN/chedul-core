@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
+	"unicode"
 
 	"github.com/rivo/uniseg"
 	"golang.org/x/crypto/bcrypt"
@@ -15,7 +16,7 @@ type Alumno struct {
 	Nombre   UserName `json:"nombre"`
 	Email    Email    `json:"email"`
 	Carrera  int64    `json:"carrera"`
-	Password string
+	Password Password
 }
 
 // TODO: Solo se utiliza en Update(), ver y cambiarlo
@@ -75,25 +76,20 @@ func (self *SignUpRequest) Validate() (Alumno, map[string]string) {
 		errors["email"] = err.Error()
 	}
 
+	clave, err := NewPassword(self.Password)
+	if err != nil {
+		errors["password"] = err.Error()
+	}
+
 	if strings.TrimSpace(self.Carrera) == "" {
 		errors["carrera"] = "Carrera es requerida"
-	}
-
-	// TODO: Expandir los requisitos de una contrasena
-	if len(self.Password) < 6 {
-		errors["password"] = "La contraseña debe tener al menos 6 caracteres"
-	}
-
-	hashedPassword, err := HashPassword(self.Password)
-	if err != nil {
-		errors["password"] = "Error al encriptar la contraseña"
 	}
 
 	return Alumno{
 		Nombre:   nombre,
 		Email:    email,
-		Password: hashedPassword,
-	}, nil
+		Password: clave,
+	}, errors
 }
 
 type AlumnoRepository interface {
@@ -123,6 +119,83 @@ func (e *Email) String() string {
 	return e.value
 }
 
+type Password struct {
+	inner string
+}
+
+func NewPassword(s string) (Password, error) {
+	if len(s) < 8 {
+		return Password{}, fmt.Errorf("La clave debe tener minimo 8 caracteres")
+	}
+
+	if len(s) > 128 {
+		return Password{}, fmt.Errorf("la clave no puede exceder 128 caracteres")
+	}
+
+	if !hasCharacterDiversity(s) {
+		return Password{}, fmt.Errorf("la clave debe contener al menos 3 de los siguientes tipos: mayúsculas, minúsculas, números y símbolos")
+	}
+
+	password, err := hash(s)
+	if err != nil {
+		return Password{}, fmt.Errorf("La clave no pudo ser encriptada")
+	}
+
+	return Password{
+		inner: password,
+	}, nil
+}
+
+// TODO: No me gusta tener algo asi. Usar con cuidado
+func NewPasswordFromEncrypted(s string) Password {
+	return Password{
+		inner: s,
+	}
+}
+
+func (p *Password) String() string {
+	return p.inner
+}
+
+// FIX: Reemplazar esto con argon2id
+func hash(s string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(s), bcrypt.DefaultCost)
+	return string(hash), err
+}
+
+func hasCharacterDiversity(password string) bool {
+	var hasUpper, hasLower, hasDigit, hasSymbol bool
+	count := 0
+
+	for _, char := range password {
+		switch {
+		case unicode.IsUpper(char):
+			hasUpper = true
+		case unicode.IsLower(char):
+			hasLower = true
+		case unicode.IsDigit(char):
+			hasDigit = true
+		case unicode.IsPunct(char) || unicode.IsSymbol(char):
+			hasSymbol = true
+		}
+	}
+
+	if hasUpper {
+		count++
+	}
+	if hasLower {
+		count++
+	}
+	if hasDigit {
+		count++
+	}
+	if hasSymbol {
+		count++
+	}
+
+	return count >= 3
+}
+
 type UserName struct {
 	value string
 }
@@ -149,9 +222,4 @@ func NewUserName(s string) (UserName, error) {
 	}
 
 	return UserName{value: s}, nil
-}
-
-func HashPassword(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(hash), err
 }
