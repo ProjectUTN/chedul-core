@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/pressly/goose"
+	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/uptrace/bun"
@@ -56,6 +56,7 @@ func (s *AlumnoHandlerSuite) cleanDatabase() {
 		return
 	}
 
+	goose.SetLogger(goose.NopLogger())
 	goose.Reset(s.db.DB, MIGRATIONS_DIR)
 	goose.Up(s.db.DB, MIGRATIONS_DIR)
 }
@@ -111,7 +112,6 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	s.Assert().Equal(http.StatusOK, response.StatusCode)
 }
 
-// TODO: Incompleto
 func (s *AlumnoHandlerSuite) TestSignUp() {
 	configPath := os.Getenv("CONFIG_DIR")
 	if configPath == "" {
@@ -125,7 +125,7 @@ func (s *AlumnoHandlerSuite) TestSignUp() {
 	body, err := json.Marshal(
 		domain.SignUpRequest{
 			Nombre:   "Lautaro",
-			Email:    "lautaro@acosta.gmail.com",
+			Email:    "lautaroacosta@gmail.com",
 			Carrera:  "ISI",
 			Password: "Chedul123",
 		},
@@ -137,14 +137,10 @@ func (s *AlumnoHandlerSuite) TestSignUp() {
 		testApp.Address+"/api/v1/signup", bytes.NewBuffer(body))
 
 	s.NoError(err)
-
-	req.Header.Set("Authorization",
-		"Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
+	req.Header.Set("Content-Type", "application/json")
 
 	response, err := client.Do(req)
-
 	s.NoError(err)
-
 	defer response.Body.Close()
 
 	s.Assert().Equal(http.StatusOK, response.StatusCode)

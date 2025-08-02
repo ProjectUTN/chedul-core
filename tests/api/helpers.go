@@ -15,7 +15,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/pressly/goose"
+	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -155,10 +155,9 @@ func SetupPgContainer(
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connUri)))
 	db := bun.NewDB(sqldb, pgdialect.New())
 
+	goose.SetLogger(goose.NopLogger())
 	goose.SetDialect("postgres")
-
-	err = goose.Up(sqldb, migrationPath)
-	if err != nil {
+	if err := goose.Up(sqldb, migrationPath); err != nil {
 		return nil, err
 	}
 
