@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -16,7 +17,7 @@ type Alumno struct {
 	Nombre   UserName `json:"nombre"`
 	Email    Email    `json:"email"`
 	Carrera  int64    `json:"carrera"`
-	Password Password
+	Password Password `json:"-"`
 }
 
 // TODO: Solo se utiliza en Update(), ver y cambiarlo
@@ -119,6 +120,10 @@ func (e *Email) String() string {
 	return e.value
 }
 
+func (e Email) MarshalJSON() ([]byte, error) {
+	return json.Marshal(e.String())
+}
+
 type Password struct {
 	inner string
 }
@@ -202,6 +207,10 @@ type UserName struct {
 
 func (u *UserName) String() string {
 	return u.value
+}
+
+func (u UserName) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.String())
 }
 
 func NewUserName(s string) (UserName, error) {
