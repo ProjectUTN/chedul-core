@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"chedul-core/internals/domain"
 	"chedul-core/internals/handlers"
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"testing"
@@ -26,7 +28,6 @@ type AlumnoHandlerSuite struct {
 }
 
 func (s *AlumnoHandlerSuite) SetupSuite() {
-	// TODO: Resolver el tema de que se hardcodee
 	testingDB, err := SetupPgContainer(MIGRATIONS_DIR)
 	s.Require().NoError(err)
 
@@ -64,23 +65,10 @@ func (s *AlumnoHandlerSuite) seedDatabase() {
 		s.T().Fatal("Database connection is nil")
 		return
 	}
-	_, err := s.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
-	s.Require().NoError(err)
-}
+	_, err :=
+		s.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
 
-func (s *AlumnoHandlerSuite) createTestAlumno(name, email string) domain.Alumno {
-	username, err := domain.NewUserName(name)
 	s.Require().NoError(err)
-
-	emailObj, err := domain.NewEmail(email)
-	s.Require().NoError(err)
-
-	return domain.Alumno{
-		Nombre:   username,
-		Email:    emailObj,
-		Carrera:  1,
-		Password: "password123",
-	}
 }
 
 func createTestToken(secretKey string, alumnoID int64) string {
@@ -97,7 +85,6 @@ func createTestToken(secretKey string, alumnoID int64) string {
 	return tokenString
 }
 
-// TODO: Refactorizar esto para probar los handlers no el repositorio.
 func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	configPath := os.Getenv("CONFIG_DIR")
 	if configPath == "" {
@@ -110,9 +97,12 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	s.NoError(err)
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", testApp.Address+"/api/v1/alumnos/1", nil)
+	req, err := http.NewRequest("GET",
+		testApp.Address+"/api/v1/alumnos/1", nil)
+
 	s.NoError(err)
-	req.Header.Set("Authorization", "Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
+	req.Header.Set("Authorization",
+		"Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
 
 	response, err := client.Do(req)
 	s.NoError(err)
@@ -121,23 +111,44 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	s.Assert().Equal(http.StatusOK, response.StatusCode)
 }
 
-// func (s *AlumnoHandlerSuite) TestGetAlumnoByEmail() {
-// 	repo := repositories.NewAlumnoRepository(s.db)
-// 	alumno := s.createTestAlumno("Lautaro Acosta", "lautaro@acosta.com")
-// 	err := repo.Create(s.ctx, &alumno)
-// 	s.Require().NoError(err)
+// TODO: Incompleto
+func (s *AlumnoHandlerSuite) TestSignUp() {
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
+		s.T().FailNow()
+	}
 
-// 	result, err := repo.GetByEmail(s.ctx, "lautaro@acosta.com")
-// 	s.Assert().NoError(err)
-// 	s.Assert().Equal(alumno.Email, result.Email)
-// }
+	testApp, err := SpawnApp("../"+configPath, WithDB("../../migrations"))
+	defer testApp.Cleanup()
+	s.NoError(err)
 
-// func (s *AlumnoHandlerSuite) assertAlumnoEquals(expected, actual domain.Alumno) {
-// 	s.Assert().Equal(expected.Password, actual.Password)
-// 	s.Assert().Equal(expected.Carrera, actual.Carrera)
-// 	s.Assert().Equal(expected.Nombre, actual.Nombre)
-// 	s.Assert().Equal(expected.Email, actual.Email)
-// }
+	body, err := json.Marshal(
+		domain.SignUpRequest{
+			Nombre:   "Lautaro",
+			Email:    "lautaro@acosta.gmail.com",
+			Carrera:  "ISI",
+			Password: "Chedul123",
+		},
+	)
+	s.NoError(err)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST",
+		testApp.Address+"/api/v1/signup", bytes.NewBuffer(body))
+
+	s.NoError(err)
+
+	req.Header.Set("Authorization",
+		"Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
+
+	response, err := client.Do(req)
+
+	s.NoError(err)
+
+	defer response.Body.Close()
+
+	s.Assert().Equal(http.StatusOK, response.StatusCode)
+}
 
 func TestAlumnoSuite(t *testing.T) {
 	if testing.Short() {
