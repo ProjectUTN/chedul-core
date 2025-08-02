@@ -74,8 +74,7 @@ func SpawnApp(configPath string, options ...SpawnOpts) (*TestApp, error) {
 	}
 	configuration.Server.Port = 0
 
-	server := BuildWithoutDB(configuration)
-	server.ConnPool = testDB
+	server := BuildWitDB(configuration, testDB)
 
 	address := server.Echo.Listener.Addr().String()
 
@@ -168,7 +167,7 @@ func SetupPgContainer(
 }
 
 // TODO: Refactorizar para usar el patron Opts, asi podemos definir si cargar el middleware, si cargar la db, etc.
-func BuildWithoutDB(configuration config.AppConfig) *server.Server {
+func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
@@ -193,7 +192,7 @@ func BuildWithoutDB(configuration config.AppConfig) *server.Server {
 		Host:      host,
 		JwtSecret: *configuration.JwtSecret,
 		Port:      port,
-		ConnPool:  nil,
+		ConnPool:  db,
 		Logger:    logger,
 	}
 

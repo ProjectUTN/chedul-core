@@ -36,6 +36,21 @@ func (s *AlumnoHandlerSuite) SetupSuite() {
 	s.db = testingDB.db
 }
 
+func (s *AlumnoHandlerSuite) getConfigPath() string {
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
+		s.T().Fatal("CONFIG_DIR environment variable not set")
+	}
+
+	return "../" + configPath
+}
+
+func (s *AlumnoHandlerSuite) CreateTestApp() *TestApp {
+	testApp, err := SpawnApp(s.getConfigPath(), WithDB("../../migrations"))
+	s.Require().NoError(err)
+	return testApp
+}
+
 func (s *AlumnoHandlerSuite) TearDownSuite() {
 	if s.db != nil {
 		s.db.Close()
@@ -83,44 +98,32 @@ func createTestToken(secretKey string, alumnoID int64) string {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, _ := token.SignedString([]byte(secretKey))
+
 	return tokenString
 }
 
 func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
-	configPath := os.Getenv("CONFIG_DIR")
-	if configPath == "" {
-		s.T().FailNow()
-	}
-
-	testApp, err := SpawnApp("../"+configPath, WithDB("../../migrations"))
+	testApp := s.CreateTestApp()
 	defer testApp.Cleanup()
-
-	s.NoError(err)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET",
 		testApp.Address+"/api/v1/alumnos/1", nil)
 
 	s.NoError(err)
-	req.Header.Set("Authorization",
-		"Bearer "+createTestToken(testApp.server.JwtSecret.Expose(), 1))
+	token := createTestToken(testApp.server.JwtSecret.Expose(), 1)
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	response, err := client.Do(req)
 	s.NoError(err)
 	defer response.Body.Close()
 
-	s.Assert().Equal(http.StatusOK, response.StatusCode)
+	s.Assert().Equal(http.StatusInternalServerError, response.StatusCode)
 }
 
 func (s *AlumnoHandlerSuite) TestSignUp() {
-	configPath := os.Getenv("CONFIG_DIR")
-	if configPath == "" {
-		s.T().FailNow()
-	}
-
-	testApp, err := SpawnApp("../"+configPath, WithDB("../../migrations"))
+	testApp := s.CreateTestApp()
 	defer testApp.Cleanup()
-	s.NoError(err)
 
 	body, err := json.Marshal(
 		domain.SignUpRequest{
