@@ -71,21 +71,22 @@ func (h *AlumnoHandler) SignUp(c echo.Context) error {
 	}
 
 	if existing, _ := h.alumnoRepo.GetByEmail(ctx, req.Email); existing != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas, Correo ya existente"})
+		return NewApiError(http.StatusBadRequest,
+			fmt.Errorf("Credenciales inválidas, Correo ya existente"))
 	}
 
 	carrera, err := h.carreraRepo.GetByName(ctx, req.Carrera)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Credenciales inválidas"})
+		return NewApiError(http.StatusBadRequest,
+			fmt.Errorf("Credenciales inválidas"))
 	}
-	alumno.Carrera = carrera.ID
 
+	alumno.Carrera = carrera.ID
 	if err := h.alumnoRepo.Create(ctx, &alumno); err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusCreated, alumno)
-
 }
 
 func (h *AlumnoHandler) LogIn(c echo.Context) error {
@@ -100,31 +101,41 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 
 	alumno, err := h.alumnoRepo.GetByEmail(ctx, email)
 	if err != nil || alumno == nil {
-		h.logger.Warn("LogIn: Intento de login fallido - credenciales inválidas", zap.String("email", email))
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
+		h.logger.Warn("LogIn: Intento de login fallido - credenciales inválidas",
+			zap.String("email", email))
+
+		return NewApiError(http.StatusUnauthorized,
+			fmt.Errorf("Credenciales inválidas"))
 	}
 
 	if !CheckPassword(req.Password, alumno.Password) {
-		h.logger.Warn("LogIn: Intento de login fallido - contraseña incorrecta", zap.String("email", email))
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Credenciales inválidas"})
+		h.logger.Warn("LogIn: Intento de login fallido - contraseña incorrecta",
+			zap.String("email", email))
+
+		return NewApiError(http.StatusUnauthorized,
+			fmt.Errorf("Credenciales inválidas"))
 	}
 
 	jwtSecret := h.jwtToken.Expose()
 	if jwtSecret == "" {
 		h.logger.Error("LogIn: JwtSecret no configurado")
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error de configuración del servidor"})
+		return NewApiError(http.StatusInternalServerError,
+			fmt.Errorf("Error de configuración del servidor"))
 	}
 
 	accessToken, err := GenerateAccessToken(alumno.ID, jwtSecret)
 	if err != nil {
 		h.logger.Error("LogIn: No se pudo generar el access token", zap.Error(err), zap.Int64("alumno_id", alumno.ID))
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token de acceso"})
+		return NewApiError(http.StatusInternalServerError,
+			fmt.Errorf("No se pudo generar el token de acceso"))
 	}
 
 	refreshToken, err := GenerateRefreshToken(alumno.ID, jwtSecret)
 	if err != nil {
 		h.logger.Error("LogIn: No se pudo generar el refresh token", zap.Error(err), zap.Int64("alumno_id", alumno.ID))
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "No se pudo generar el token de refresco"})
+
+		return NewApiError(http.StatusInternalServerError,
+			fmt.Errorf("No se pudo generar el token de refresco"))
 	}
 
 	refreshTokenCookie := new(http.Cookie)
@@ -257,9 +268,9 @@ func (h *AlumnoHandler) Delete(c echo.Context) error {
 	}
 
 	if err := h.alumnoRepo.Delete(ctx, id); err != nil {
-		h.logger.Error("failed to delete alumno", zap.Error(err), zap.Int64("id", id))
+		h.logger.Error("Fallo al eliminar usuario", zap.Error(err), zap.Int64("id", id))
 		return err
 	}
 
-	return c.JSON(http.StatusOK, "Alumno deleted successfully")
+	return c.JSON(http.StatusOK, "Alumno eliminado exitosamente")
 }
