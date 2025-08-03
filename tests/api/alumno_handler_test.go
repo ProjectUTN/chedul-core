@@ -20,31 +20,6 @@ type AlumnoHandlerSuite struct {
 	suite.Suite
 }
 
-func (s *AlumnoHandlerSuite) getConfigPath() string {
-	configPath := os.Getenv("CONFIG_DIR")
-	if configPath == "" {
-		s.T().Fatal("CONFIG_DIR environment variable not set")
-	}
-
-	return "../" + configPath
-}
-
-func (s *AlumnoHandlerSuite) CreateTestApp() *TestApp {
-	// TODO: Ver si borrar codigo en SpawnApp, porque usamos la conexion del
-	//  Handler
-	testApp, err := SpawnApp(s.getConfigPath(), WithDB("../../migrations"))
-	s.Require().NoError(err)
-
-	s.seedDatabase(testApp)
-
-	return testApp
-}
-
-func (s *AlumnoHandlerSuite) seedDatabase(testApp *TestApp) {
-	_, err := testApp.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
-	s.Require().NoError(err)
-}
-
 func createTestToken(secretKey string, alumnoID int64) string {
 	claims := handlers.CustomClaims{
 		Sub: alumnoID,
@@ -61,7 +36,9 @@ func createTestToken(secretKey string, alumnoID int64) string {
 }
 
 func (s *AlumnoHandlerSuite) TestGetAlumnoByIdFail() {
-	testApp := s.CreateTestApp()
+	testApp, err := CreateTestApp()
+	s.Require().NoError(err)
+
 	defer testApp.Cleanup()
 
 	client := &http.Client{}
@@ -80,7 +57,9 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoByIdFail() {
 }
 
 func (s *AlumnoHandlerSuite) TestSignUpSuccess() {
-	testApp := s.CreateTestApp()
+	testApp, err := CreateTestApp()
+	s.Require().NoError(err)
+
 	defer testApp.Cleanup()
 
 	body, err := json.Marshal(

@@ -201,3 +201,37 @@ func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
 
 	return &server
 }
+
+func getConfigPath() (string, error) {
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
+		return "", fmt.Errorf("CONFIG_DIR environment variable not set")
+	}
+
+	return "../" + configPath, nil
+}
+
+func CreateTestApp() (*TestApp, error) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	testApp, err := SpawnApp(configPath, WithDB("../../migrations"))
+	if err != nil {
+		return nil, err
+	}
+
+	seedDatabase(testApp)
+
+	return testApp, nil
+}
+
+func seedDatabase(testApp *TestApp) error {
+	_, err := testApp.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
