@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"chedul-core/internals/domain"
 	"chedul-core/internals/handlers"
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -12,28 +11,13 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/suite"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/uptrace/bun"
 )
 
 var MIGRATIONS_DIR string = "../../migrations"
 
 type AlumnoHandlerSuite struct {
 	suite.Suite
-	db        *bun.DB
-	container testcontainers.Container
-	ctx       context.Context
-}
-
-func (s *AlumnoHandlerSuite) SetupSuite() {
-	testingDB, err := SetupPgContainer(MIGRATIONS_DIR)
-	s.Require().NoError(err)
-
-	s.ctx = context.Background()
-	s.container = testingDB.container
-	s.db = testingDB.db
 }
 
 func (s *AlumnoHandlerSuite) getConfigPath() string {
@@ -46,44 +30,18 @@ func (s *AlumnoHandlerSuite) getConfigPath() string {
 }
 
 func (s *AlumnoHandlerSuite) CreateTestApp() *TestApp {
+	// TODO: Ver si borrar codigo en SpawnApp, porque usamos la conexion del
+	//  Handler
 	testApp, err := SpawnApp(s.getConfigPath(), WithDB("../../migrations"))
 	s.Require().NoError(err)
+
+	s.seedDatabase(testApp)
+
 	return testApp
 }
 
-func (s *AlumnoHandlerSuite) TearDownSuite() {
-	if s.db != nil {
-		s.db.Close()
-	}
-	if s.container != nil {
-		s.container.Terminate(s.ctx)
-	}
-}
-
-func (s *AlumnoHandlerSuite) SetupTest() {
-	s.cleanDatabase()
-	s.seedDatabase()
-}
-
-func (s *AlumnoHandlerSuite) cleanDatabase() {
-	if s.db == nil {
-		s.T().Fatal("Database connection is nil")
-		return
-	}
-
-	goose.SetLogger(goose.NopLogger())
-	goose.Reset(s.db.DB, MIGRATIONS_DIR)
-	goose.Up(s.db.DB, MIGRATIONS_DIR)
-}
-
-func (s *AlumnoHandlerSuite) seedDatabase() {
-	if s.db == nil {
-		s.T().Fatal("Database connection is nil")
-		return
-	}
-	_, err :=
-		s.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
-
+func (s *AlumnoHandlerSuite) seedDatabase(testApp *TestApp) {
+	_, err := testApp.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
 	s.Require().NoError(err)
 }
 
@@ -102,7 +60,7 @@ func createTestToken(secretKey string, alumnoID int64) string {
 	return tokenString
 }
 
-func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
+func (s *AlumnoHandlerSuite) TestGetAlumnoByIdFail() {
 	testApp := s.CreateTestApp()
 	defer testApp.Cleanup()
 
@@ -121,7 +79,7 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoById() {
 	s.Assert().Equal(http.StatusInternalServerError, response.StatusCode)
 }
 
-func (s *AlumnoHandlerSuite) TestSignUp() {
+func (s *AlumnoHandlerSuite) TestSignUpSuccess() {
 	testApp := s.CreateTestApp()
 	defer testApp.Cleanup()
 
@@ -146,7 +104,7 @@ func (s *AlumnoHandlerSuite) TestSignUp() {
 	s.NoError(err)
 	defer response.Body.Close()
 
-	s.Assert().Equal(http.StatusOK, response.StatusCode)
+	s.Assert().Equal(http.StatusCreated, response.StatusCode)
 }
 
 func TestAlumnoSuite(t *testing.T) {
