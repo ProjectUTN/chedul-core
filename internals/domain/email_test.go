@@ -14,7 +14,7 @@ func TestEmailValidationProperty(t *testing.T) {
 	parameters.MinSuccessfulTests = 100
 	properties := gopter.NewProperties(parameters)
 
-	properties.Property("valid emails are accepted", prop.ForAll(
+	properties.Property("emails validos son aceptados", prop.ForAll(
 		func(validEmail string) bool {
 			email, err := ParseEmail(validEmail)
 			if err != nil {
@@ -40,19 +40,19 @@ func TestEmailValidationSpecificCases(t *testing.T) {
 		email    string
 		rejected bool
 	}{
-		{"empty string", "", true},
-		{"missing @ symbol is rejected", "example.com", true},
-		{"Missing subject is rejected", "@domain", true},
+		{"string vacio", "", true},
+		{"falta el simbolo @ es rechazado", "example.com", true},
+		{"falta el asunto es rechazado", "@domain", true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseEmail(tc.email)
 			if tc.rejected && err == nil {
-				t.Errorf("Expected error for email %q, but got none", tc.email)
+				t.Errorf("Se esperaba error para el email %q, pero no se obtuvo ninguno", tc.email)
 			}
 			if !tc.rejected && err != nil {
-				t.Errorf("Expected no error for email %q, but got: %v", tc.email, err)
+				t.Errorf("No se esperaba error para el email %q, pero se obtuvo: %v", tc.email, err)
 			}
 		})
 	}

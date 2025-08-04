@@ -59,7 +59,8 @@ test *args:
     esac
   done
   
-  test_cmd="CONFIG_DIR=../configuration/ gotestsum --format=standard-verbose --"
+  test_cmd="CONFIG_DIR=../configuration/ gotestsum --format=testname --"
+  # test_cmd="CONFIG_DIR=../configuration/ gotestsum --format=standard-verbose --"
   
   if [ "$short_mode" = true ]; then
     test_cmd="$test_cmd -short"

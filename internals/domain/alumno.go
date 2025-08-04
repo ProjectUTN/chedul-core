@@ -7,7 +7,7 @@ import (
 
 type Alumno struct {
 	ID       int64    `json:"id"`
-	Nombre   UserName `json:"nombre"`
+	Nombre   Username `json:"nombre"`
 	Email    Email    `json:"email"`
 	Carrera  int64    `json:"carrera"`
 	Password Password `json:"-"`
@@ -37,7 +37,7 @@ type LoginRequest struct {
 func (self *AlumnoRequest) Validate() map[string]string {
 	errors := make(map[string]string)
 
-	if _, err := NewUserName(self.Nombre); err != nil {
+	if _, err := NewUsername(self.Nombre); err != nil {
 		errors["nombre"] = err.Error()
 	}
 
@@ -60,7 +60,7 @@ func (self *AlumnoRequest) Validate() map[string]string {
 func (self *SignUpRequest) Validate() (Alumno, map[string]string) {
 	errors := make(map[string]string)
 
-	nombre, err := NewUserName(self.Nombre)
+	nombre, err := NewUsername(self.Nombre)
 	if err != nil {
 		errors["nombre"] = err.Error()
 	}

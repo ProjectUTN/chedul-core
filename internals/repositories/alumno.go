@@ -26,7 +26,7 @@ func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
 		return domain.Alumno{}, err
 	}
 
-	userName, err := domain.NewUserName(model.Nombre)
+	userName, err := domain.NewUsername(model.Nombre)
 
 	if err != nil {
 		return domain.Alumno{}, err
