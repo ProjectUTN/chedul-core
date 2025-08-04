@@ -20,6 +20,29 @@ type AlumnoHandlerSuite struct {
 	suite.Suite
 }
 
+func (a *AlumnoHandlerSuite) SignUpRequest(address string,
+	payload domain.SignUpRequest) (*http.Response, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", address, bytes.NewBuffer(body))
+
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	response, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func createTestToken(secretKey string, alumnoID int64) string {
 	claims := handlers.CustomClaims{
 		Sub: alumnoID,
@@ -56,13 +79,11 @@ func (s *AlumnoHandlerSuite) TestGetAlumnoByIdFail() {
 	s.Assert().Equal(http.StatusInternalServerError, response.StatusCode)
 }
 
-func (s *AlumnoHandlerSuite) TestSignUpSuccess() {
+func (s *AlumnoHandlerSuite) TestSignUp() {
 	testApp, err := CreateTestApp()
 	s.Require().NoError(err)
-
 	defer testApp.Cleanup()
-
-	body, err := json.Marshal(
+	response, err := s.SignUpRequest(testApp.Address+"/api/v1/signup",
 		domain.SignUpRequest{
 			Nombre:   "Lautaro",
 			Email:    "lautaroacosta@gmail.com",
@@ -71,18 +92,7 @@ func (s *AlumnoHandlerSuite) TestSignUpSuccess() {
 		},
 	)
 	s.NoError(err)
-
-	client := &http.Client{}
-	req, err := http.NewRequest("POST",
-		testApp.Address+"/api/v1/signup", bytes.NewBuffer(body))
-
-	s.NoError(err)
-	req.Header.Set("Content-Type", "application/json")
-
-	response, err := client.Do(req)
-	s.NoError(err)
 	defer response.Body.Close()
-
 	s.Assert().Equal(http.StatusCreated, response.StatusCode)
 }
 
