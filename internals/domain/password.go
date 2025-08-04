@@ -111,24 +111,33 @@ func hash(s string) (string, error) {
 	return encoded, nil
 }
 
-func check(hashed, password string) (bool, error) {
-	var mem uint32
-	var it uint32
-	var par uint8
-	var saltB64, hashB64 string
-
-	_, err := fmt.Sscanf(hashed, "$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
-		&mem, &it, &par, &saltB64, &hashB64)
-	if err != nil {
-		return false, fmt.Errorf("formato hash inválido: %w", err)
+func CheckPassword(hashed, password string) (bool, error) {
+	parts := strings.Split(hashed, "$")
+	if len(parts) != 6 {
+		return false, fmt.Errorf("formato hash inválido: expected 6 parts, got %d", len(parts))
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(saltB64)
+	if parts[1] != "argon2id" {
+		return false, fmt.Errorf("formato hash inválido: expected argon2id, got %s", parts[1])
+	}
+
+	if parts[2] != "v=19" {
+		return false, fmt.Errorf("formato hash inválido: expected v=19, got %s", parts[2])
+	}
+
+	var mem, it uint32
+	var par uint8
+	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &mem, &it, &par)
+	if err != nil {
+		return false, fmt.Errorf("formato hash inválido en parámetros: %w", err)
+	}
+
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return false, fmt.Errorf("salt corrupta: %w", err)
 	}
 
-	expectedHash, err := base64.RawStdEncoding.DecodeString(hashB64)
+	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return false, fmt.Errorf("hash corrupto: %w", err)
 	}
@@ -138,5 +147,6 @@ func check(hashed, password string) (bool, error) {
 	if subtle.ConstantTimeCompare(computed, expectedHash) == 1 {
 		return true, nil
 	}
+
 	return false, nil
 }

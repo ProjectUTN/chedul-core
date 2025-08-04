@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type ApiError struct {
@@ -34,11 +33,6 @@ func InvalidRequestData(errors map[string]string) ApiError {
 
 func InvalidJSON() ApiError {
 	return NewApiError(http.StatusBadRequest, fmt.Errorf("invalid JSON request data"))
-}
-
-func CheckPassword(password, hashed string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hashed), []byte(password))
-	return err == nil
 }
 
 // func GenerateJWT(alumnoID int64, secretKey string) (string, error) {
