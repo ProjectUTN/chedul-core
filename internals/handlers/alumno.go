@@ -162,6 +162,7 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 
 func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 	refreshTokenCookie, err := c.Cookie("refreshToken")
+	h.logger.Warn("RefreshToken:", zap.String("RefreshToken", refreshTokenCookie.String()), zap.Error(err))
 
 	if err != nil || refreshTokenCookie.Value == "" {
 		h.logger.Warn("RefreshToken: Refresh Token faltante o inválido en cookie", zap.Error(err))
