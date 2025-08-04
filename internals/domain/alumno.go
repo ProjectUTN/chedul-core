@@ -70,7 +70,7 @@ func (self *SignUpRequest) Validate() (Alumno, map[string]string) {
 		errors["email"] = err.Error()
 	}
 
-	clave, err := NewPassword(self.Password)
+	clave, err := ParsePassword(self.Password)
 	if err != nil {
 		errors["password"] = err.Error()
 	}

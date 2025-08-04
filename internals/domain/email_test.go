@@ -9,7 +9,7 @@ import (
 	"github.com/leanovate/gopter/prop"
 )
 
-func TestEmailValidationProperty(t *testing.T) {
+func TestEmailProp(t *testing.T) {
 	parameters := gopter.DefaultTestParameters()
 	parameters.MinSuccessfulTests = 100
 	properties := gopter.NewProperties(parameters)

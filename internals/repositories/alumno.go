@@ -39,7 +39,7 @@ func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
 		Carrera: model.Carrera,
 		// TODO: Todavia no se si es peligroso asumir que la clave en la base
 		// de datos ya esta encriptada
-		Password: domain.NewPasswordFromEncrypted(model.Password),
+		Password: domain.ParsePasswordFromEncrypted(model.Password),
 	}, nil
 }
 
