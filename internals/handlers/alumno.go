@@ -239,7 +239,7 @@ func (h *AlumnoHandler) Update(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	email, err := domain.NewEmail(req.Email)
+	email, err := domain.ParseEmail(req.Email)
 	if err != nil {
 		return err
 	}

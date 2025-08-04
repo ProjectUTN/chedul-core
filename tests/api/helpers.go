@@ -196,7 +196,8 @@ func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
 		Logger:    logger,
 	}
 
-	server.SetupMiddleware()
+	// TODO: Add the middleware as an opt-in
+	// server.SetupMiddleware()
 	server.SetupRoutes()
 
 	return &server

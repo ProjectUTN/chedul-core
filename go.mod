@@ -4,7 +4,9 @@ go 1.24.4
 
 require (
 	github.com/TylerBrock/colorjson v0.0.0-20200706003622-8a50f05110d2
+	github.com/brianvoe/gofakeit/v6 v6.28.0
 	github.com/labstack/echo/v4 v4.13.4
+	github.com/leanovate/gopter v0.2.11
 	github.com/pressly/goose/v3 v3.24.3
 	github.com/rivo/uniseg v0.4.7
 	github.com/stretchr/testify v1.10.0

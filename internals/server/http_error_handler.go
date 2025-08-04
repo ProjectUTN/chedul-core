@@ -28,6 +28,8 @@ func HttpErrorHandler(err error, c echo.Context) {
 		c.JSON(http.StatusInternalServerError, errResp)
 	}
 
-	c.Logger().Error("HTTP API Error ", "err ", err.Error(), "path ", c.Request().URL.Path)
+	// TODO: Molesta a la hora de ver el output de los tests. Deshabilitar
+	// durante tests sin overhead
+	// c.Logger().Error("HTTP API Error ", "err ", err.Error(), "path ", c.Request().URL.Path)
 
 }

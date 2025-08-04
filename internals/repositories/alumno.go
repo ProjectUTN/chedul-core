@@ -21,7 +21,7 @@ type alumnoRepository struct {
 }
 
 func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
-	email, err := domain.NewEmail(model.Email)
+	email, err := domain.ParseEmail(model.Email)
 	if err != nil {
 		return domain.Alumno{}, err
 	}
