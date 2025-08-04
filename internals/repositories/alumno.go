@@ -21,23 +21,25 @@ type alumnoRepository struct {
 }
 
 func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
-	email, err := domain.NewEmail(model.Email)
+	email, err := domain.ParseEmail(model.Email)
 	if err != nil {
 		return domain.Alumno{}, err
 	}
 
-	userName, err := domain.NewUserName(model.Nombre)
+	userName, err := domain.NewUsername(model.Nombre)
 
 	if err != nil {
 		return domain.Alumno{}, err
 	}
 
 	return domain.Alumno{
-		ID:       model.ID,
-		Nombre:   userName,
-		Email:    email,
-		Carrera:  model.Carrera,
-		Password: model.Password,
+		ID:      model.ID,
+		Nombre:  userName,
+		Email:   email,
+		Carrera: model.Carrera,
+		// TODO: Todavia no se si es peligroso asumir que la clave en la base
+		// de datos ya esta encriptada
+		Password: domain.NewPasswordFromEncrypted(model.Password),
 	}, nil
 }
 
@@ -47,9 +49,10 @@ func (r *alumnoRepository) toModel(alumno domain.Alumno) AlumnoModel {
 		Nombre:   alumno.Nombre.String(),
 		Email:    alumno.Email.String(),
 		Carrera:  alumno.Carrera,
-		Password: alumno.Password,
+		Password: alumno.Password.String(),
 	}
 }
+
 func NewAlumnoRepository(db *bun.DB) domain.AlumnoRepository {
 	return &alumnoRepository{db: db}
 }

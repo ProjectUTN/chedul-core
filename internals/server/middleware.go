@@ -34,6 +34,10 @@ func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFu
 			if err != nil {
 				if httpErr, ok := err.(*echo.HTTPError); ok {
 					status = httpErr.Code
+				} else if apiErr, ok := err.(handlers.ApiError); ok {
+					status = apiErr.StatusCode
+				} else {
+					status = http.StatusInternalServerError
 				}
 			}
 

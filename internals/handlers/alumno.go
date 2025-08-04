@@ -108,7 +108,7 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 			fmt.Errorf("Credenciales inválidas"))
 	}
 
-	if !CheckPassword(req.Password, alumno.Password) {
+	if !CheckPassword(req.Password, alumno.Password.String()) {
 		h.logger.Warn("LogIn: Intento de login fallido - contraseña incorrecta",
 			zap.String("email", email))
 
@@ -239,7 +239,7 @@ func (h *AlumnoHandler) Update(c echo.Context) error {
 		return InvalidJSON()
 	}
 
-	email, err := domain.NewEmail(req.Email)
+	email, err := domain.ParseEmail(req.Email)
 	if err != nil {
 		return err
 	}

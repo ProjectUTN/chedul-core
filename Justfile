@@ -59,7 +59,8 @@ test *args:
     esac
   done
   
-  test_cmd="CONFIG_DIR=../configuration/ gotestsum --format testname --debug --"
+  test_cmd="CONFIG_DIR=../configuration/ gotestsum --format=testname --"
+  # test_cmd="CONFIG_DIR=../configuration/ gotestsum --format=standard-verbose --"
   
   if [ "$short_mode" = true ]; then
     test_cmd="$test_cmd -short"
@@ -77,3 +78,6 @@ test *args:
 
 update_slow_tests:
   go test -json -short ./... | gotestsum tool slowest --skip-stmt "testing.Short" --threshold 200ms
+
+fuckGo:
+   CONFIG_DIR=../configuration/ go test -v ./...

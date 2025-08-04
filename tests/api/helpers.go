@@ -15,7 +15,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/pressly/goose"
+	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -74,8 +74,7 @@ func SpawnApp(configPath string, options ...SpawnOpts) (*TestApp, error) {
 	}
 	configuration.Server.Port = 0
 
-	server := BuildWithoutDB(configuration)
-	server.ConnPool = testDB
+	server := BuildWitDB(configuration, testDB)
 
 	address := server.Echo.Listener.Addr().String()
 
@@ -155,10 +154,9 @@ func SetupPgContainer(
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connUri)))
 	db := bun.NewDB(sqldb, pgdialect.New())
 
+	goose.SetLogger(goose.NopLogger())
 	goose.SetDialect("postgres")
-
-	err = goose.Up(sqldb, migrationPath)
-	if err != nil {
+	if err := goose.Up(sqldb, migrationPath); err != nil {
 		return nil, err
 	}
 
@@ -169,7 +167,7 @@ func SetupPgContainer(
 }
 
 // TODO: Refactorizar para usar el patron Opts, asi podemos definir si cargar el middleware, si cargar la db, etc.
-func BuildWithoutDB(configuration config.AppConfig) *server.Server {
+func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
@@ -194,12 +192,47 @@ func BuildWithoutDB(configuration config.AppConfig) *server.Server {
 		Host:      host,
 		JwtSecret: *configuration.JwtSecret,
 		Port:      port,
-		ConnPool:  nil,
+		ConnPool:  db,
 		Logger:    logger,
 	}
 
-	server.SetupMiddleware()
+	// TODO: Add the middleware as an opt-in
+	// server.SetupMiddleware()
 	server.SetupRoutes()
 
 	return &server
+}
+
+func getConfigPath() (string, error) {
+	configPath := os.Getenv("CONFIG_DIR")
+	if configPath == "" {
+		return "", fmt.Errorf("CONFIG_DIR environment variable not set")
+	}
+
+	return "../" + configPath, nil
+}
+
+func CreateTestApp() (*TestApp, error) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	testApp, err := SpawnApp(configPath, WithDB("../../migrations"))
+	if err != nil {
+		return nil, err
+	}
+
+	seedDatabase(testApp)
+
+	return testApp, nil
+}
+
+func seedDatabase(testApp *TestApp) error {
+	_, err := testApp.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
+
+	if err != nil {
+		return err
+	}
+	return nil
 }
