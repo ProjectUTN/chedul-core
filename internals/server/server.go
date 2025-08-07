@@ -5,6 +5,7 @@ import (
 	"chedul-core/internals/repositories"
 	"chedul-core/pkg/config"
 	"chedul-core/pkg/db"
+	"chedul-core/pkg/util"
 	"net"
 
 	"chedul-core/pkg/logger"
@@ -19,6 +20,8 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
+
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.uber.org/zap"
 )
 
@@ -39,6 +42,7 @@ type Server struct {
 }
 
 func Build(configuration config.AppConfig) *Server {
+
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
@@ -130,7 +134,11 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) SetupMiddleware() {
-	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-service"))
+	if util.IsEnvProd() {
+		s.Echo.Use(otelecho.Middleware("chedul-core"))
+	}
+
+	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-core"))
 	s.Echo.Use(CORSMiddleware())
 	s.Echo.Use(RecoverMiddleware(s.Logger))
 }

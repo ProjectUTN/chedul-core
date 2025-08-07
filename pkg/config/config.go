@@ -29,9 +29,10 @@ const (
 )
 
 type AppConfig struct {
-	Server    ServerConfig   `json:"server"`
-	Database  DatabaseConfig `json:"database"`
-	JwtSecret *Secret        `json:"jwt_secret"`
+	Server         ServerConfig    `json:"server"`
+	Database       DatabaseConfig  `json:"database"`
+	JwtSecret      *Secret         `json:"jwt_secret" mapstructure:"jwt_secret"`
+	TracerProvider HoneycombConfig `json:"tracer_provider" mapstructure:"tracer_provider"`
 }
 
 type ServerConfig struct {
@@ -39,6 +40,13 @@ type ServerConfig struct {
 	Port     int               `json:"port"`
 	LogLevel zapcore.Level     `json:"log_level"`
 	Pool     *ConnectionConfig `json:"pool"`
+}
+
+type HoneycombConfig struct {
+	ServiceName string  `json:"service_name" mapstructure:"service_name"`
+	Protocol    string  `json:"protocol"`
+	Endpoint    string  `json:"endpoint"`
+	ApiKey      *Secret `json:"api_key" mapstructure:"api_key"`
 }
 
 type DatabaseConfig struct {
@@ -110,8 +118,9 @@ func (c *AppConfig) PrettyPrint() {
 	json.Unmarshal(tmp, &obj)
 
 	f := colorjson.NewFormatter()
-	f.Indent = 2
+	f.Indent = 4
 	s, _ := f.Marshal(obj)
+
 	fmt.Println(string(s))
 }
 
