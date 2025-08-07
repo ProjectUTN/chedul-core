@@ -16,7 +16,7 @@ func TestHealthCheckWorks(t *testing.T) {
 		t.Skip("env var 'CONFIG_DIR' no inicializada")
 	}
 
-	testApp, err := api.SpawnApp(configPath)
+	testApp, err := api.SpawnApp()
 	if err != nil {
 		log.Fatal(err)
 	}

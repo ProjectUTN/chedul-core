@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: chedul
       POSTGRES_DB: chedul-db
     ports:
-      - "5432:5432"
+      - "7070:7070"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

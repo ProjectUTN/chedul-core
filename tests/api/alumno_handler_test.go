@@ -6,7 +6,6 @@ import (
 	"chedul-core/internals/handlers"
 	"encoding/json"
 	"net/http"
-	"os"
 	"testing"
 	"time"
 
@@ -99,10 +98,6 @@ func (s *AlumnoHandlerSuite) TestSignUp() {
 func TestAlumnoSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("too slow for testing.Short")
-	}
-
-	if os.Getenv("CONFIG_DIR") == "" {
-		t.Skip("env var 'CONFIG_DIR' no inicializada")
 	}
 
 	suite.Run(t, new(AlumnoHandlerSuite))
