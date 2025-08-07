@@ -3,3 +3,4 @@ bin/
 scripts/spawn_postgres.sh
 scripts/spawn_postgres.sh
 .env
+configuration/

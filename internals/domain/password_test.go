@@ -11,6 +11,10 @@ import (
 )
 
 func TestPasswordPropTest(t *testing.T) {
+	if testing.Short() {
+		t.Skip("too slow for testing.Short")
+	}
+
 	parameters := gopter.DefaultTestParameters()
 	parameters.MinSuccessfulTests = 1000
 	properties := gopter.NewProperties(parameters)

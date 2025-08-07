@@ -2,6 +2,7 @@ package server
 
 import (
 	"chedul-core/internals/handlers"
+	"chedul-core/pkg/util"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,12 +11,20 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
+
+var tracer = otel.Tracer("chedul-core")
 
 func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			ctx, span := tracer.Start(c.Request().Context(), "tracing_middleware")
+			defer span.End()
+
 			start := time.Now()
 
 			requestLogger := logger.With(
@@ -24,7 +33,22 @@ func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFu
 				zap.String("remote_addr", c.RealIP()),
 			)
 
+			if spanCtx := span.SpanContext(); spanCtx.IsValid() {
+				requestLogger = requestLogger.With(
+					zap.String("trace_id", spanCtx.TraceID().String()),
+					zap.String("span_id", spanCtx.SpanID().String()),
+				)
+			}
+			span.SetAttributes(
+				attribute.String("http.method", c.Request().Method),
+				attribute.String("http.url", c.Request().URL.String()),
+				attribute.String("http.remote_addr", c.RealIP()),
+			)
+
 			c.Set("Logger", requestLogger)
+			c.Set("tracer", tracer)
+			c.SetRequest(c.Request().WithContext(ctx))
+
 			requestLogger.Info("Request started")
 
 			err := next(c)
@@ -32,6 +56,9 @@ func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFu
 
 			status := c.Response().Status
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+
 				if httpErr, ok := err.(*echo.HTTPError); ok {
 					status = httpErr.Code
 				} else if apiErr, ok := err.(handlers.ApiError); ok {
@@ -39,7 +66,15 @@ func TracingMiddleware(logger *zap.Logger, serviceName string) echo.MiddlewareFu
 				} else {
 					status = http.StatusInternalServerError
 				}
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
+
+			span.SetAttributes(
+				attribute.Int("http.status_code", status),
+				attribute.Int64("http.response_size", c.Response().Size),
+				attribute.Float64("http.duration_ms", float64(duration.Nanoseconds())/1000000),
+			)
 
 			logFields := []zap.Field{
 				zap.Int("status", status),
@@ -86,6 +121,31 @@ type CustomClaims struct {
 func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			ctx, span := tracer.Start(c.Request().Context(), "auth_middleware")
+			defer span.End()
+
+			if !util.IsEnvProd() {
+				c.Set("alumnoID", int64(1))
+
+				span.SetStatus(codes.Ok, "Modo desarrollo - autenticación automática")
+				span.SetAttributes(
+					attribute.String("auth.mode", "development"),
+					attribute.Int64("auth.user_id", 1),
+					attribute.String("auth.status", "auto_success"),
+				)
+
+				logger.Info("RequireAuthMiddleware: Modo desarrollo - autenticación automática",
+					zap.Int64("alumnoID", 1),
+					zap.String("path", c.Request().URL.Path),
+					zap.String("method", c.Request().Method),
+					zap.String("remote_ip", c.RealIP()),
+					zap.String("mode", "development"),
+				)
+
+				c.SetRequest(c.Request().WithContext(ctx))
+				return next(c)
+			}
+
 			var accessTokenString string
 			var tokenSource string
 
@@ -94,6 +154,9 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 				accessTokenString = strings.TrimPrefix(authHeader, "Bearer ")
 				tokenSource = "header"
 			} else {
+				span.SetStatus(codes.Error, "missing authorization header")
+				span.SetAttributes(attribute.String("auth.error", "missing_token"))
+
 				logger.Warn("RequireAuthMiddleware: Access Token faltante en encabezado Authorization",
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
@@ -102,8 +165,14 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 				return handlers.NewApiError(http.StatusUnauthorized, fmt.Errorf("Access Token faltante en encabezado Authorization"))
 			}
 
+			span.SetAttributes(
+				attribute.String("auth.token_source", tokenSource),
+				attribute.String("auth.method", "jwt"),
+			)
+
 			token, err := jwt.ParseWithClaims(accessTokenString, &CustomClaims{}, func(token *jwt.Token) (any, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					span.SetAttributes(attribute.String("auth.error", "unexpected_signing_method"))
 					logger.Error("RequireAuthMiddleware: Método de firma inesperado para access token",
 						zap.Any("alg", token.Header["alg"]),
 						zap.String("path", c.Request().URL.Path),
@@ -117,6 +186,10 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 			})
 
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "token validation failed")
+				span.SetAttributes(attribute.String("auth.error", "token_validation_failed"))
+
 				logger.Error("RequireAuthMiddleware: Error al parsear o validar access token",
 					zap.Error(err),
 					zap.String("token_string", accessTokenString),
@@ -132,6 +205,13 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 
 			if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
 				c.Set("alumnoID", claims.Sub)
+
+				span.SetStatus(codes.Ok, "authentication successful")
+				span.SetAttributes(
+					attribute.Int64("auth.user_id", claims.Sub),
+					attribute.String("auth.status", "success"),
+				)
+
 				logger.Info("RequireAuthMiddleware: Autenticación exitosa con Access Token",
 					zap.Int64("alumnoID", claims.Sub),
 					zap.String("path", c.Request().URL.Path),
@@ -140,8 +220,16 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 					zap.String("token_source", tokenSource),
 				)
 
+				c.SetRequest(c.Request().WithContext(ctx))
+
 				return next(c)
 			} else {
+				span.SetStatus(codes.Error, "invalid token or claims")
+				span.SetAttributes(
+					attribute.String("auth.error", "invalid_token_or_claims"),
+					attribute.Bool("token.valid", token.Valid),
+				)
+
 				logger.Warn("RequireAuthMiddleware: Access Token no válido o claims incorrectos",
 					zap.String("path", c.Request().URL.Path),
 					zap.String("method", c.Request().Method),
@@ -153,12 +241,4 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 			}
 		}
 	}
-}
-
-func GetAlumnoIDFromContext(c echo.Context) (int64, error) {
-	alumnoID, ok := c.Get("alumnoID").(int64)
-	if !ok {
-		return 0, fmt.Errorf("alumnoID no encontrado en el contexto o tipo incorrecto")
-	}
-	return alumnoID, nil
 }

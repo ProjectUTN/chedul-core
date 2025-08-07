@@ -4,8 +4,8 @@ MIGRATION_PATH:="migrations"
 _default:
   @just --list
 
-api build_flag="": build
-  docker compose up {{ if build_flag == "rebuild" { "--build" } else { "" } }}
+api: build
+  docker compose up --build
 
 watch short="":
   watchexec -r -e go -- just test {{ if short == "short" { "short" } else { "" } }}

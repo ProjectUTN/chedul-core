@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
+
 	"go.uber.org/zap"
 )
 
@@ -48,6 +49,9 @@ func (h *AlumnoHandler) GetByID(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// _, span := StartTrace(ctx, "getUserByID", trace.WithAttributes(attribute.Int64("id", id)))
+	// defer span.End()
 
 	alumno, err := h.alumnoRepo.GetByID(ctx, id)
 	if err != nil {

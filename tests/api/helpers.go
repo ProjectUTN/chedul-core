@@ -23,6 +23,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type TestApp struct {
@@ -41,6 +42,7 @@ func (t *TestApp) Cleanup() error {
 type spawnOptions struct {
 	withDB         bool
 	migrationsPath string
+	config         *config.AppConfig
 }
 
 type SpawnOpts func(*spawnOptions)
@@ -52,8 +54,39 @@ func WithDB(migrationsPath string) SpawnOpts {
 	}
 }
 
-func SpawnApp(configPath string, options ...SpawnOpts) (*TestApp, error) {
-	opts := &spawnOptions{}
+func WithConfig(cfg *config.AppConfig) SpawnOpts {
+	return func(so *spawnOptions) {
+		so.config = cfg
+	}
+}
+
+func createTestConfig() *config.AppConfig {
+	return &config.AppConfig{
+		Server: config.ServerConfig{
+			Host:     "localhost",
+			Port:     0,
+			LogLevel: zapcore.InfoLevel,
+		},
+		Database: config.DatabaseConfig{
+			User:       "user",
+			Password:   config.NewSecret("password"),
+			Name:       "test",
+			RequireSsl: false,
+		},
+		JwtSecret: config.NewSecret("test-jwt-secret-key"),
+		TracerProvider: config.HoneycombConfig{
+			ServiceName: "chedul-core-test",
+			Protocol:    "grpc",
+			Endpoint:    "api.honeycomb.io:443",
+			ApiKey:      config.NewSecret(""),
+		},
+	}
+}
+
+func SpawnApp(options ...SpawnOpts) (*TestApp, error) {
+	opts := &spawnOptions{
+		config: createTestConfig(),
+	}
 	for _, opt := range options {
 		opt(opts)
 	}
@@ -67,14 +100,10 @@ func SpawnApp(configPath string, options ...SpawnOpts) (*TestApp, error) {
 		testDB = TestingDB.db
 	}
 
-	configuration, err := config.Load(configPath)
-	if err != nil {
-		dir, _ := os.Getwd()
-		return nil, fmt.Errorf("No se pudo leer la configuracion: %v", dir)
-	}
+	configuration := opts.config
 	configuration.Server.Port = 0
 
-	server := BuildWitDB(configuration, testDB)
+	server := BuildWitDB(*configuration, testDB)
 
 	address := server.Echo.Listener.Addr().String()
 
@@ -213,12 +242,18 @@ func getConfigPath() (string, error) {
 }
 
 func CreateTestApp() (*TestApp, error) {
-	configPath, err := getConfigPath()
+	testApp, err := SpawnApp(WithDB("../../migrations"))
 	if err != nil {
 		return nil, err
 	}
 
-	testApp, err := SpawnApp(configPath, WithDB("../../migrations"))
+	seedDatabase(testApp)
+
+	return testApp, nil
+}
+
+func CreateTestAppWithConfig(cfg *config.AppConfig) (*TestApp, error) {
+	testApp, err := SpawnApp(WithDB("../../migrations"), WithConfig(cfg))
 	if err != nil {
 		return nil, err
 	}
