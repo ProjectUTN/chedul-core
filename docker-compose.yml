@@ -7,6 +7,8 @@ services:
       ALLOW_DB_ALIAS: true
       SERVER_ENV: development
       DB_HOST: database
+      HONEYCOMB_API_KEY: ${HONEYCOMB_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
     ports:
       - "8080:8080"
     depends_on:
