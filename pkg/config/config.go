@@ -208,6 +208,19 @@ func Load(configDir string) (AppConfig, error) {
 		config.Server.Pool = DefaultConnectionConfig()
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		return AppConfig{}, fmt.Errorf("'JWT_SECRET' no puede ser leida correctamente")
+	}
+
+	honeyApiKey := os.Getenv("HONEYCOMB_API_KEY")
+	if honeyApiKey == "" {
+		return AppConfig{}, fmt.Errorf("'HONEYCOMB_API_KEY' no puede ser leida correctamente")
+	}
+
+	config.JwtSecret = NewSecret(jwtSecret)
+	config.TracerProvider.ApiKey = NewSecret(honeyApiKey)
+
 	return config, nil
 }
 
