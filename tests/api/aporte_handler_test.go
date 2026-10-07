@@ -268,3 +268,39 @@ func TestAporteSuite(t *testing.T) {
 
 	suite.Run(t, new(AporteHandlerSuite))
 }
+
+func TestAportesSoloLinks(t *testing.T) {
+	if testing.Short() {
+		t.Skip("too slow for testing.Short")
+	}
+
+	cfg := createTestConfig()
+	cfg.Uploads.Disabled = true
+	app, err := CreateTestAppWithConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Cleanup()
+
+	c := NewClient(t, app)
+	c.Registrar("Hana", "hana.aportes@chedul.com")
+
+	resp := c.JSON("GET", "/aportes/config", nil)
+	if resp.Status != http.StatusOK || !bytes.Contains(resp.Body, []byte(`"subida_archivos":false`)) {
+		t.Fatalf("config inesperada: %d %s", resp.Status, resp.Body)
+	}
+
+	materia := strconv.FormatInt(c.MateriaID("isi-aed"), 10)
+	campos := map[string]string{"titulo": "Apunte", "materia_id": materia, "tag_id": "1"}
+
+	resp = c.Multipart("POST", "/aportes", campos, &Archivo{Nombre: "apunte.pdf", Contenido: []byte("%PDF")})
+	if resp.Status != http.StatusUnprocessableEntity {
+		t.Fatalf("con la subida desactivada un archivo tiene que dar 422, dio %d %s", resp.Status, resp.Body)
+	}
+
+	campos["link"] = "https://drive.google.com/file/d/abc"
+	resp = c.Multipart("POST", "/aportes", campos, nil)
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("un link tiene que poder subirse: %d %s", resp.Status, resp.Body)
+	}
+}

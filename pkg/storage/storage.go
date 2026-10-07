@@ -2,7 +2,7 @@
 //
 // Por ahora hay una sola implementacion, en disco local. En produccion el
 // directorio tiene que estar en un volumen persistente (por ejemplo un volume
-// de Fly.io o Railway). Si mas adelante se quiere usar S3 o Cloudflare R2
+// de Railway o un VPS). Si mas adelante se quiere usar S3 o Cloudflare R2
 // alcanza con otra implementacion de Storage.
 package storage
 

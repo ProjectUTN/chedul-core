@@ -48,6 +48,9 @@ type ServerConfig struct {
 type UploadsConfig struct {
 	Dir       string `json:"dir"`
 	MaxSizeMB int64  `json:"max_size_mb" mapstructure:"max_size_mb"`
+	// Disabled apaga la subida de archivos y los aportes pasan a ser solo
+	// links. Sirve en hostings sin disco persistente, como Cloud Run.
+	Disabled bool `json:"disabled"`
 }
 
 type HoneycombConfig struct {
@@ -153,7 +156,7 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 		c.Server.Host = apiHost
 	}
 
-	// La mayoria de los hostings (Fly, Render, Railway) indican el puerto con PORT
+	// La mayoria de los hostings (Cloud Run, Render, Railway) indican el puerto con PORT
 	if port := os.Getenv("PORT"); port != "" {
 		if p, err := strconv.Atoi(port); err == nil {
 			c.Server.Port = p
@@ -171,6 +174,10 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 
 	if dir := os.Getenv("UPLOADS_DIR"); dir != "" {
 		c.Uploads.Dir = dir
+	}
+
+	if v := os.Getenv("UPLOADS_DISABLED"); v != "" {
+		c.Uploads.Disabled = v == "true" || v == "1"
 	}
 
 	return c

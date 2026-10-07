@@ -41,21 +41,36 @@ const (
 )
 
 type AporteHandler struct {
-	repo        domain.AporteRepository
-	materiaRepo domain.MateriaRepository
-	storage     storage.Storage
-	maxBytes    int64
-	logger      *zap.Logger
+	repo           domain.AporteRepository
+	materiaRepo    domain.MateriaRepository
+	storage        storage.Storage
+	maxBytes       int64
+	subidaArchivos bool
+	logger         *zap.Logger
 }
 
-func NewAporteHandler(repo domain.AporteRepository, materiaRepo domain.MateriaRepository, storage storage.Storage, maxSizeMB int64, logger *zap.Logger) *AporteHandler {
+func NewAporteHandler(repo domain.AporteRepository, materiaRepo domain.MateriaRepository, storage storage.Storage, maxSizeMB int64, subidaArchivos bool, logger *zap.Logger) *AporteHandler {
 	return &AporteHandler{
-		repo:        repo,
-		materiaRepo: materiaRepo,
-		storage:     storage,
-		maxBytes:    maxSizeMB * 1024 * 1024,
-		logger:      logger,
+		repo:           repo,
+		materiaRepo:    materiaRepo,
+		storage:        storage,
+		maxBytes:       maxSizeMB * 1024 * 1024,
+		subidaArchivos: subidaArchivos,
+		logger:         logger,
 	}
+}
+
+type ConfigAportesResponse struct {
+	SubidaArchivos bool  `json:"subida_archivos"`
+	MaxMB          int64 `json:"max_mb"`
+}
+
+// Config le dice al frontend si se pueden subir archivos o solo links.
+func (h *AporteHandler) Config(c echo.Context) error {
+	return c.JSON(http.StatusOK, ConfigAportesResponse{
+		SubidaArchivos: h.subidaArchivos,
+		MaxMB:          h.maxBytes / 1024 / 1024,
+	})
 }
 
 type ListaAportesResponse struct {
@@ -232,6 +247,10 @@ func (h *AporteHandler) Create(c echo.Context) error {
 		return InvalidRequestData(map[string]string{"archivo": "No se pudo leer el archivo"})
 	}
 	tieneArchivo := fileHeader != nil
+
+	if tieneArchivo && !h.subidaArchivos {
+		return InvalidRequestData(map[string]string{"archivo": "La subida de archivos está desactivada. Compartí un link (Drive, YouTube, etc.)"})
+	}
 
 	if errs := datos.Validate(tieneArchivo); len(errs) > 0 {
 		return InvalidRequestData(errs)

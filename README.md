@@ -41,33 +41,42 @@ TEST_DATABASE_URL="postgres://chedul:chedul@127.0.0.1:5432/postgres?sslmode=disa
 | --- | --- | --- |
 | `JWT_SECRET` | Sí | Firma de los tokens. En producción, mínimo 32 caracteres. |
 | `DATABASE_URL` | En producción | Conexión completa a Postgres. Si no está, se usa `configuration/*.yml` + `DB_HOST` / `DB_PASSWORD`. |
-| `CORS_ORIGINS` | En producción | Dominios del frontend separados por coma, por ejemplo `https://chedul.vercel.app`. |
+| `CORS_ORIGINS` | Solo si el front llama directo a la API | Dominios del frontend separados por coma. Con el proxy de Vercel no hace falta. |
 | `SERVER_ENV` | No | `development` (default), `test` o `production`. En producción la cookie de sesión es `Secure` y `SameSite=None`. |
-| `PORT` | No | Puerto. Fly, Render y Railway lo definen solos. |
+| `PORT` | No | Puerto. Cloud Run, Render y Railway lo definen solos. |
 | `UPLOADS_DIR` | No | Carpeta de los archivos subidos. Default `uploads`; en Docker `/uploads`. |
+| `UPLOADS_DISABLED` | No | `true` apaga la subida de archivos y los aportes son solo links. Para hostings sin disco, como Cloud Run. |
 | `HONEYCOMB_API_KEY` | No | Si está, se mandan trazas a Honeycomb. |
 
 ## Deploy
 
-La forma más simple, y gratis para empezar:
+Gratis y rápido: **Neon** (base de datos) + **Google Cloud Run** (API) +
+**Vercel** (frontend). Cloud Run apaga la API cuando nadie la usa y la prende
+en menos de un segundo, porque la imagen es un binario de Go. La guía paso a
+paso, con capturas de qué elegir en cada pantalla, está en el doc del proyecto.
 
-1. **Base de datos en [Neon](https://neon.tech)**: crear un proyecto y copiar
-   la connection string (`postgres://...?sslmode=require`).
-2. **API en [Fly.io](https://fly.io)** con el `fly.toml` de este repo:
+1. **Neon** (https://neon.tech): creá un proyecto en la región São Paulo y
+   copiá la connection string (`postgresql://...?sslmode=require`).
+2. **Cloud Run**: con el [CLI de gcloud](https://cloud.google.com/sdk/docs/install)
+   instalado y un proyecto con facturación activada (el free tier no cobra,
+   pero Google pide tarjeta):
    ```sh
-   fly launch --no-deploy --copy-config
-   fly volumes create chedul_uploads --size 1
-   fly secrets set JWT_SECRET="$(openssl rand -hex 32)" \
-     DATABASE_URL="postgres://..." \
-     CORS_ORIGINS="https://tu-front.vercel.app"
-   fly deploy
+   gcloud config set project TU_PROYECTO
+   gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+   ./scripts/deploy-cloudrun.sh
    ```
-   El volumen guarda los archivos de los aportes; sin él se pierden en cada deploy.
-3. **Frontend en Vercel o Netlify** (ver el README de chedul-frontend) con
-   `VITE_API_URL=https://chedul-core.fly.dev/api/v1`.
+   La primera vez pide la `DATABASE_URL`, genera el `JWT_SECRET` y deja los
+   aportes en modo solo links (`UPLOADS_DISABLED=true`, Cloud Run no tiene
+   disco persistente). Al final muestra la URL de la API.
+3. **Vercel**: importar `chedul-frontend`, poner la URL de Cloud Run en su
+   `vercel.json` y `VITE_API_URL=/api/v1` (ver su README).
 
-Railway o Render también sirven: usan el mismo `Dockerfile`, hay que definir
-las mismas variables y montar un volumen en `/uploads`.
+**Deploy automático:** `.github/workflows/deploy_cloud_run.yml` despliega en
+cada merge a main una vez que existan la variable `GCP_PROJECT` y el secret
+`GCP_SA_KEY` en el repo. Sin eso no hace nada.
+
+Las migraciones se aplican solas al iniciar, así que no hay que correr nada
+contra la base.
 
 ## API
 
@@ -89,6 +98,7 @@ Base: `/api/v1`. Las rutas marcadas con 🔒 piden `Authorization: Bearer <acces
 | GET 🔒 | `/aportes` | Listado. Filtros: `materia_id`, `tag_id`, `q`, `mios=1`, `favoritos=1`, `orden=recientes\|populares`, `pagina`, `limite` |
 | POST 🔒 | `/aportes` | Subir (multipart: `titulo`, `descripcion`, `materia_id`, `tag_id`, `link` y/o `archivo`) |
 | GET 🔒 | `/aportes/tags` | Tipos de aporte |
+| GET 🔒 | `/aportes/config` | Si se pueden subir archivos (`subida_archivos`) y el tamaño máximo |
 | GET/PUT/DELETE 🔒 | `/aportes/:id` | Ver, editar o borrar (solo el autor edita y borra) |
 | GET 🔒 | `/aportes/:id/archivo` | Descargar el archivo |
 | POST/DELETE 🔒 | `/aportes/:id/favorito` | Marcar o desmarcar favorito |

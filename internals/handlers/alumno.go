@@ -91,8 +91,10 @@ func (h *AlumnoHandler) setRefreshCookie(c echo.Context, value string, expires t
 		SameSite: http.SameSiteLaxMode,
 	}
 
-	// En produccion el frontend y la API suelen estar en dominios distintos
-	// (por ejemplo Vercel y Fly.io); sin SameSite=None el navegador no manda la cookie.
+	// En produccion la API puede estar en otro dominio que el frontend; sin
+	// SameSite=None el navegador no manda la cookie. Igual conviene que el
+	// frontend haga de proxy de /api (ver vercel.json del front): Safari
+	// bloquea las cookies de terceros aunque tengan SameSite=None.
 	if config.IsProd() {
 		cookie.SameSite = http.SameSiteNoneMode
 	}

@@ -185,7 +185,7 @@ func (s *Server) SetupRoutes() {
 	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.Logger)
 	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandler(condicionAlumnoRepo, condicionRepo, materiaRepo, s.Logger)
 	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, materiaRepo, condicionAlumnoRepo)
-	aporteHandler := handlers.NewAporteHandler(aporteRepo, materiaRepo, s.Storage, s.Config.Uploads.MaxSizeMB, s.Logger)
+	aporteHandler := handlers.NewAporteHandler(aporteRepo, materiaRepo, s.Storage, s.Config.Uploads.MaxSizeMB, !s.Config.Uploads.Disabled, s.Logger)
 	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
 
 	api := s.Echo.Group("/api/v1")
@@ -223,6 +223,7 @@ func (s *Server) SetupRoutes() {
 	aportes.GET("", aporteHandler.List)
 	aportes.POST("", aporteHandler.Create)
 	aportes.GET("/tags", aporteHandler.Tags)
+	aportes.GET("/config", aporteHandler.Config)
 	aportes.GET("/:id", aporteHandler.Get)
 	aportes.PUT("/:id", aporteHandler.Update)
 	aportes.DELETE("/:id", aporteHandler.Delete)

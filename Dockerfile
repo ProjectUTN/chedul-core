@@ -15,7 +15,8 @@ COPY . .
 
 RUN go build -ldflags="-s -w" -o main ./cmd/api
 
-# Directorio para los archivos subidos. En produccion hay que montar un volumen aca.
+# Directorio para los archivos subidos. Solo sirve con un disco persistente
+# montado aca; en Cloud Run se usa UPLOADS_DISABLED=true y los aportes son links.
 RUN mkdir -p /out/uploads
 
 FROM scratch
@@ -26,9 +27,10 @@ COPY --from=builder /app/configuration /configuration
 COPY --from=builder /app/main /main
 COPY --from=builder /out/uploads /uploads
 
-# Corre como root: los volumenes de Fly.io y Railway se montan con dueño root
-# y un usuario sin privilegios no podria escribir los archivos subidos.
+# Corre como root: los volumenes de Railway o de un VPS se montan con dueño
+# root y un usuario sin privilegios no podria escribir los archivos subidos.
 # La imagen es "scratch" (no tiene shell ni nada mas que el binario).
+# Cloud Run y la mayoria de los hostings definen PORT y la API lo respeta.
 ENV CONFIG_DIR=configuration/ \
     SERVER_ENV=production \
     UPLOADS_DIR=/uploads
