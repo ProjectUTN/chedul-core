@@ -80,9 +80,11 @@ func (s *MateriaHandlerSuite) TestComisiones() {
 	var comisiones []comisionTest
 	resp.JSON(s.T(), &comisiones)
 
-	// 5 comisiones anuales del plan viejo + 4 del 2do cuatrimestre 2026
-	s.Require().Len(comisiones, 9)
-	k11 := comisiones[0]
+	// 6 comisiones del 1er cuatrimestre + 4 del 2do, ordenadas por codigo
+	s.Require().Len(comisiones, 10)
+	s.Equal("K1.1", comisiones[0].Codigo)
+	s.Equal("1C", comisiones[0].Cuatrimestre)
+	k11 := comisiones[1]
 	s.Equal("K1.1", k11.Codigo)
 	s.Equal("2C", k11.Cuatrimestre)
 	s.Require().Len(k11.Horarios, 2)
@@ -91,7 +93,16 @@ func (s *MateriaHandlerSuite) TestComisiones() {
 	s.Equal("12:25", k11.Horarios[0].HoraFin)
 	s.Equal("Aula 2.10", k11.Horarios[0].Aula)
 	s.Equal(5, k11.Horarios[1].Dia) // viernes
-	s.Equal("Anual", comisiones[1].Cuatrimestre)
+	for _, c := range comisiones {
+		s.NotEqual("Anual", c.Cuatrimestre)
+	}
+
+	// El curso 6 del 1C cursa Algoritmos el sabado a la mañana
+	k16 := comisiones[len(comisiones)-1]
+	s.Equal("K1.6", k16.Codigo)
+	s.Require().Len(k16.Horarios, 1)
+	s.Equal(6, k16.Horarios[0].Dia)
+	s.Equal("08:00", k16.Horarios[0].HoraInicio)
 
 	// Probabilidad tiene dos comisiones en el mismo curso
 	resp = c.JSON("GET", fmt.Sprintf("/materias/%d/comisiones", c.MateriaID("isi-pye")), nil)
