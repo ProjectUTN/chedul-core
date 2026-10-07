@@ -30,8 +30,25 @@ type Materia struct {
 	Correlativas []Correlativa `json:"correlativas"`
 }
 
+// HorarioComision es un dia y franja horaria en que cursa una comision.
+// Dia: 1 = lunes ... 7 = domingo, igual que en las clases del alumno.
+type HorarioComision struct {
+	Dia        int    `json:"dia"`
+	HoraInicio string `json:"hora_inicio"`
+	HoraFin    string `json:"hora_fin"`
+}
+
+// Comision es un curso de una materia (K1.1, K3.2, ...) con sus horarios.
+type Comision struct {
+	ID           int64             `json:"id"`
+	Codigo       string            `json:"codigo"`
+	Cuatrimestre string            `json:"cuatrimestre"`
+	Horarios     []HorarioComision `json:"horarios"`
+}
+
 type MateriaRepository interface {
 	GetAll(ctx context.Context) ([]Materia, error)
 	GetByCarrera(ctx context.Context, carreraID int64) ([]Materia, error)
 	GetByID(ctx context.Context, id int64) (*Materia, error)
+	GetComisiones(ctx context.Context, materiaID int64) ([]Comision, error)
 }

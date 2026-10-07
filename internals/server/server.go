@@ -201,6 +201,7 @@ func (s *Server) SetupRoutes() {
 
 	api.GET("/materias", materiaHandler.GetAll)
 	api.GET("/materias/:id", materiaHandler.GetByID)
+	api.GET("/materias/:id/comisiones", materiaHandler.GetComisiones)
 
 	api.GET("/condicion", condicionHandler.GetAll)
 

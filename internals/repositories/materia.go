@@ -142,3 +142,57 @@ func (r *materiaRepository) GetByID(ctx context.Context, id int64) (*domain.Mate
 
 	return &materias[0], nil
 }
+
+type comisionRow struct {
+	ID           int64          `bun:"id"`
+	Codigo       string         `bun:"codigo"`
+	Cuatrimestre string         `bun:"cuatrimestre"`
+	Dia          sql.NullInt64  `bun:"dia"`
+	HoraInicio   sql.NullString `bun:"hora_inicio"`
+	HoraFin      sql.NullString `bun:"hora_fin"`
+}
+
+// GetComisiones devuelve las comisiones de la materia con sus horarios. El dia
+// se calcula por nombre (1 = lunes) para no depender de los ids de la tabla dias.
+func (r *materiaRepository) GetComisiones(ctx context.Context, materiaID int64) ([]domain.Comision, error) {
+	var rows []comisionRow
+	err := r.db.NewSelect().
+		TableExpr("comision AS co").
+		ColumnExpr("co.id, coalesce(co.codigo, '') AS codigo, co.cuatrimestre").
+		ColumnExpr("array_position(array['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'], d.nombre) AS dia").
+		ColumnExpr("to_char(h.hora_inicio, 'HH24:MI') AS hora_inicio").
+		ColumnExpr("to_char(h.hora_fin, 'HH24:MI') AS hora_fin").
+		Join("LEFT JOIN horario AS h ON h.comision_id = co.id").
+		Join("LEFT JOIN dias AS d ON d.id = h.dia_id").
+		Where("co.materia_id = ?", materiaID).
+		OrderExpr("co.codigo, dia, h.hora_inicio").
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []domain.Comision{}
+	index := map[int64]int{}
+	for _, row := range rows {
+		i, ok := index[row.ID]
+		if !ok {
+			i = len(result)
+			index[row.ID] = i
+			result = append(result, domain.Comision{
+				ID:           row.ID,
+				Codigo:       row.Codigo,
+				Cuatrimestre: row.Cuatrimestre,
+				Horarios:     []domain.HorarioComision{},
+			})
+		}
+		if row.Dia.Valid {
+			result[i].Horarios = append(result[i].Horarios, domain.HorarioComision{
+				Dia:        int(row.Dia.Int64),
+				HoraInicio: row.HoraInicio.String,
+				HoraFin:    row.HoraFin.String,
+			})
+		}
+	}
+
+	return result, nil
+}
