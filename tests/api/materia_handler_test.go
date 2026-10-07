@@ -26,6 +26,7 @@ type comisionTest struct {
 		Dia        int    `json:"dia"`
 		HoraInicio string `json:"hora_inicio"`
 		HoraFin    string `json:"hora_fin"`
+		Aula       string `json:"aula"`
 	} `json:"horarios"`
 }
 
@@ -79,18 +80,29 @@ func (s *MateriaHandlerSuite) TestComisiones() {
 	var comisiones []comisionTest
 	resp.JSON(s.T(), &comisiones)
 
-	s.Require().Len(comisiones, 5)
+	// 5 comisiones anuales del plan viejo + 4 del 2do cuatrimestre 2026
+	s.Require().Len(comisiones, 9)
 	k11 := comisiones[0]
 	s.Equal("K1.1", k11.Codigo)
-	s.Equal("Anual", k11.Cuatrimestre)
+	s.Equal("2C", k11.Cuatrimestre)
 	s.Require().Len(k11.Horarios, 2)
 	s.Equal(2, k11.Horarios[0].Dia) // martes
 	s.Equal("10:55", k11.Horarios[0].HoraInicio)
 	s.Equal("12:25", k11.Horarios[0].HoraFin)
+	s.Equal("Aula 2.10", k11.Horarios[0].Aula)
 	s.Equal(5, k11.Horarios[1].Dia) // viernes
+	s.Equal("Anual", comisiones[1].Cuatrimestre)
+
+	// Probabilidad tiene dos comisiones en el mismo curso
+	resp = c.JSON("GET", fmt.Sprintf("/materias/%d/comisiones", c.MateriaID("isi-pye")), nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	comisiones = nil
+	resp.JSON(s.T(), &comisiones)
+	s.Require().Len(comisiones, 2)
+	s.Equal("K3.1 C1", comisiones[0].Codigo)
 
 	// Materia sin comisiones cargadas: lista vacia
-	resp = c.JSON("GET", fmt.Sprintf("/materias/%d/comisiones", c.MateriaID("isi-devops")), nil)
+	resp = c.JSON("GET", fmt.Sprintf("/materias/%d/comisiones", c.MateriaID("isi-qca")), nil)
 	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
 	s.JSONEq("[]", string(resp.Body))
 

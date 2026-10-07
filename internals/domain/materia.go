@@ -36,6 +36,7 @@ type HorarioComision struct {
 	Dia        int    `json:"dia"`
 	HoraInicio string `json:"hora_inicio"`
 	HoraFin    string `json:"hora_fin"`
+	Aula       string `json:"aula"`
 }
 
 // Comision es un curso de una materia (K1.1, K3.2, ...) con sus horarios.

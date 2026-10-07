@@ -150,6 +150,7 @@ type comisionRow struct {
 	Dia          sql.NullInt64  `bun:"dia"`
 	HoraInicio   sql.NullString `bun:"hora_inicio"`
 	HoraFin      sql.NullString `bun:"hora_fin"`
+	Aula         sql.NullString `bun:"aula"`
 }
 
 // GetComisiones devuelve las comisiones de la materia con sus horarios. El dia
@@ -162,10 +163,11 @@ func (r *materiaRepository) GetComisiones(ctx context.Context, materiaID int64) 
 		ColumnExpr("array_position(array['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'], d.nombre) AS dia").
 		ColumnExpr("to_char(h.hora_inicio, 'HH24:MI') AS hora_inicio").
 		ColumnExpr("to_char(h.hora_fin, 'HH24:MI') AS hora_fin").
+		ColumnExpr("h.aula").
 		Join("LEFT JOIN horario AS h ON h.comision_id = co.id").
 		Join("LEFT JOIN dias AS d ON d.id = h.dia_id").
 		Where("co.materia_id = ?", materiaID).
-		OrderExpr("co.codigo, dia, h.hora_inicio").
+		OrderExpr("co.codigo, co.cuatrimestre, dia, h.hora_inicio").
 		Scan(ctx, &rows)
 	if err != nil {
 		return nil, err
@@ -190,6 +192,7 @@ func (r *materiaRepository) GetComisiones(ctx context.Context, materiaID int64) 
 				Dia:        int(row.Dia.Int64),
 				HoraInicio: row.HoraInicio.String,
 				HoraFin:    row.HoraFin.String,
+				Aula:       row.Aula.String,
 			})
 		}
 	}
