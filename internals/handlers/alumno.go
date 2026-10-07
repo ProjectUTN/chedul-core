@@ -17,18 +17,22 @@ import (
 const refreshTokenCookieName = "refreshToken"
 
 type AlumnoHandler struct {
-	alumnoRepo  domain.AlumnoRepository
-	carreraRepo domain.CarreraRepository
-	logger      *zap.Logger
-	jwtToken    config.Secret
+	alumnoRepo     domain.AlumnoRepository
+	carreraRepo    domain.CarreraRepository
+	logger         *zap.Logger
+	jwtToken       config.Secret
+	googleClientID string
+	validarGoogle  ValidadorGoogle
 }
 
-func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, jwtSecret config.Secret) *AlumnoHandler {
+func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, jwtSecret config.Secret, googleClientID string) *AlumnoHandler {
 	return &AlumnoHandler{
-		alumnoRepo:  alumnoRepo,
-		logger:      logger,
-		carreraRepo: carreraRepo,
-		jwtToken:    jwtSecret,
+		alumnoRepo:     alumnoRepo,
+		logger:         logger,
+		carreraRepo:    carreraRepo,
+		jwtToken:       jwtSecret,
+		googleClientID: googleClientID,
+		validarGoogle:  validarTokenGoogle,
 	}
 }
 
@@ -129,6 +133,13 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 		return credencialesInvalidas
 	}
 
+	h.logger.Info("LogIn: autenticación exitosa", zap.Int64("alumno_id", alumno.ID))
+
+	return h.iniciarSesion(c, alumno)
+}
+
+// iniciarSesion devuelve el access token y deja el refresh token en la cookie.
+func (h *AlumnoHandler) iniciarSesion(c echo.Context, alumno *domain.Alumno) error {
 	jwtSecret := h.jwtToken.Expose()
 
 	accessToken, err := GenerateAccessToken(alumno.ID, jwtSecret)
@@ -142,8 +153,6 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 	}
 
 	h.setRefreshCookie(c, refreshToken, time.Now().Add(RefreshTokenDuration))
-
-	h.logger.Info("LogIn: autenticación exitosa", zap.Int64("alumno_id", alumno.ID))
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"accessToken": accessToken,

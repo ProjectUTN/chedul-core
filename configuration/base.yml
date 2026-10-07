@@ -28,3 +28,8 @@ tracer_provider:
   service_name: "chedul-core"
   protocol: http/protobuf
   endpoint: "https://api.honeycomb.io"
+
+# Login con Google (Google Cloud > Credenciales > ID de cliente OAuth web).
+# Es publico; GOOGLE_CLIENT_ID lo pisa.
+google:
+  client_id: "753152353813-25vhkbbbr9s8m20e7jaj74fj6n0mfkrs.apps.googleusercontent.com"
