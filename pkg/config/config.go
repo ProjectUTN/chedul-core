@@ -35,6 +35,13 @@ type AppConfig struct {
 	JwtSecret      *Secret         `json:"jwt_secret" mapstructure:"jwt_secret"`
 	TracerProvider HoneycombConfig `json:"tracer_provider" mapstructure:"tracer_provider"`
 	Uploads        UploadsConfig   `json:"uploads"`
+	Google         GoogleConfig    `json:"google"`
+}
+
+// GoogleConfig habilita "Continuar con Google". El client ID es publico (va en
+// el front tambien); sin el, el login con Google queda apagado.
+type GoogleConfig struct {
+	ClientID string `json:"client_id" mapstructure:"client_id"`
 }
 
 type ServerConfig struct {
@@ -178,6 +185,10 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 
 	if v := os.Getenv("UPLOADS_DISABLED"); v != "" {
 		c.Uploads.Disabled = v == "true" || v == "1"
+	}
+
+	if id := os.Getenv("GOOGLE_CLIENT_ID"); id != "" {
+		c.Google.ClientID = id
 	}
 
 	return c

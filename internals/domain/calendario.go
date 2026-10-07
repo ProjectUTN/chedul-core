@@ -137,6 +137,8 @@ type Clase struct {
 	HoraFin    string          `json:"hora_fin"`
 	Aula       string          `json:"aula"`
 	Materia    *MateriaResumen `json:"materia"`
+	// Comision de la que se cargo la clase; nil si se cargo a mano
+	ComisionID *int64 `json:"comision_id"`
 }
 
 type DatosClase struct {
@@ -146,6 +148,7 @@ type DatosClase struct {
 	HoraFin    string `json:"hora_fin"`
 	Aula       string `json:"aula"`
 	MateriaID  *int64 `json:"materia_id"`
+	ComisionID *int64 `json:"comision_id"`
 }
 
 func (d *DatosClase) Normalizar() {
@@ -154,6 +157,7 @@ func (d *DatosClase) Normalizar() {
 	d.HoraFin = strings.TrimSpace(d.HoraFin)
 	d.Aula = strings.TrimSpace(d.Aula)
 	d.MateriaID = normalizarMateria(d.MateriaID)
+	d.ComisionID = normalizarMateria(d.ComisionID)
 }
 
 func (d *DatosClase) Validate() map[string]string {

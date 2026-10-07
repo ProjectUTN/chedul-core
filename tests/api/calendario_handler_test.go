@@ -30,6 +30,7 @@ type claseTest struct {
 	Materia    *struct {
 		ID int64 `json:"id"`
 	} `json:"materia"`
+	ComisionID *int64 `json:"comision_id"`
 }
 
 type CalendarioHandlerSuite struct {
@@ -153,6 +154,22 @@ func (s *CalendarioHandlerSuite) TestHorarioSemanal() {
 	lunes := nueva(map[string]any{"titulo": "AED teoría", "dia": 1, "hora_inicio": "19:00", "hora_fin": "23:00", "materia_id": aed})
 	s.Equal("08:30", jueves.HoraInicio)
 	s.Equal("Lab 3", jueves.Aula)
+	s.Nil(jueves.ComisionID)
+
+	// Clase cargada desde una comision: guarda de cual viene
+	resp0 := c.JSON("GET", ruta("/materias/%d/comisiones", aed), nil)
+	var comisiones []struct {
+		ID int64 `json:"id"`
+	}
+	resp0.JSON(s.T(), &comisiones)
+	s.Require().NotEmpty(comisiones)
+	desdeComision := nueva(map[string]any{"titulo": "AED", "dia": 2, "hora_inicio": "10:55", "hora_fin": "12:25", "materia_id": aed, "comision_id": comisiones[0].ID})
+	s.Require().NotNil(desdeComision.ComisionID)
+	s.Equal(comisiones[0].ID, *desdeComision.ComisionID)
+	resp0 = c.JSON("POST", "/clases", map[string]any{"titulo": "x", "dia": 2, "hora_inicio": "10:55", "hora_fin": "12:25", "materia_id": c.MateriaID("isi-am1"), "comision_id": comisiones[0].ID})
+	s.Equal(http.StatusUnprocessableEntity, resp0.Status, string(resp0.Body))
+	resp0 = c.JSON("DELETE", ruta("/clases/%d", desdeComision.ID), nil)
+	s.Require().Equal(http.StatusNoContent, resp0.Status, string(resp0.Body))
 
 	resp := c.JSON("GET", "/clases", nil)
 	s.Require().Equal(http.StatusOK, resp.Status)

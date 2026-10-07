@@ -85,6 +85,9 @@ func createTestConfig() *config.AppConfig {
 		Uploads: config.UploadsConfig{
 			MaxSizeMB: 1,
 		},
+		Google: config.GoogleConfig{
+			ClientID: "test-client.apps.googleusercontent.com",
+		},
 	}
 }
 

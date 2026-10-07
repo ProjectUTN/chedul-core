@@ -179,7 +179,7 @@ func (s *Server) SetupRoutes() {
 	aporteRepo := repositories.NewAporteRepository(s.ConnPool)
 	calendarioRepo := repositories.NewCalendarioRepository(s.ConnPool)
 
-	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret)
+	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret, s.Config.Google.ClientID)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.Logger)
 	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.Logger)
 	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.Logger)
@@ -195,6 +195,8 @@ func (s *Server) SetupRoutes() {
 	api.POST("/login", alumnoHandler.LogIn)
 	api.POST("/logout", alumnoHandler.LogOut)
 	api.POST("/refresh-token", alumnoHandler.RefreshToken)
+	api.GET("/auth/google", alumnoHandler.GoogleConfig)
+	api.POST("/auth/google", alumnoHandler.LogInGoogle)
 
 	api.GET("/carreras", carreraHandler.GetAll)
 	api.GET("/carreras/:id", carreraHandler.GetByID)

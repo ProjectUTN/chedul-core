@@ -7,8 +7,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-
-
 type AlumnoHandlerSuite struct {
 	suite.Suite
 	app *TestApp
@@ -190,4 +188,19 @@ func TestAlumnoSuite(t *testing.T) {
 	}
 
 	suite.Run(t, new(AlumnoHandlerSuite))
+}
+
+func (s *AlumnoHandlerSuite) TestLoginGoogleRechazaTokenTrucho() {
+	c := NewClient(s.T(), s.app)
+
+	resp := c.JSON("GET", "/auth/google", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	s.Contains(string(resp.Body), ".apps.googleusercontent.com")
+
+	resp = c.JSON("POST", "/auth/google", map[string]string{"credential": "token-trucho"})
+	s.Equal(http.StatusUnauthorized, resp.Status, string(resp.Body))
+	s.Contains(string(resp.Body), "No se pudo verificar tu cuenta de Google")
+
+	resp = c.JSON("POST", "/auth/google", map[string]string{})
+	s.Equal(http.StatusBadRequest, resp.Status, string(resp.Body))
 }
