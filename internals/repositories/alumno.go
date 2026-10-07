@@ -57,26 +57,6 @@ func NewAlumnoRepository(db *bun.DB) domain.AlumnoRepository {
 	return &alumnoRepository{db: db}
 }
 
-func (r *alumnoRepository) GetAll(ctx context.Context) ([]domain.Alumno, error) {
-	var model []AlumnoModel
-	err := r.db.NewSelect().Model(&model).Scan(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]domain.Alumno, len(model))
-	for i, model := range model {
-		res, err := r.toDomain(model)
-		if err != nil {
-			return nil, err
-		}
-
-		result[i] = res
-	}
-
-	return result, nil
-}
-
 func (r *alumnoRepository) GetByID(ctx context.Context, id int64) (*domain.Alumno, error) {
 	var model AlumnoModel
 	err := r.db.NewSelect().Model(&model).Where("id = ?", id).Scan(ctx)

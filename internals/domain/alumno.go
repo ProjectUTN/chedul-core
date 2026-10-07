@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"strings"
 )
 
 type Alumno struct {
@@ -13,19 +12,17 @@ type Alumno struct {
 	Password Password `json:"-"`
 }
 
-// TODO: Solo se utiliza en Update(), ver y cambiarlo
-type AlumnoRequest struct {
-	Nombre   string `json:"nombre"`
-	Email    string `json:"email"`
-	Carrera  string `json:"carrera"`
-	Password string `json:"password"`
+// ActualizarAlumnoRequest es lo que el alumno puede cambiar de su propio perfil.
+type ActualizarAlumnoRequest struct {
+	Nombre    string `json:"nombre"`
+	CarreraID int64  `json:"carrera_id"`
 }
 
 type SignUpRequest struct {
-	Nombre   string `json:"nombre"`
-	Email    string `json:"email"`
-	Carrera  string `json:"carrera"`
-	Password string `json:"password"`
+	Nombre    string `json:"nombre"`
+	Email     string `json:"email"`
+	CarreraID int64  `json:"carrera_id"`
+	Password  string `json:"password"`
 }
 
 type LoginRequest struct {
@@ -33,28 +30,19 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
-// TODO: Deuda Tecnica
-func (self *AlumnoRequest) Validate() map[string]string {
+func (self *ActualizarAlumnoRequest) Validate() (Username, map[string]string) {
 	errors := make(map[string]string)
 
-	if _, err := NewUsername(self.Nombre); err != nil {
+	nombre, err := NewUsername(self.Nombre)
+	if err != nil {
 		errors["nombre"] = err.Error()
 	}
 
-	if _, err := ParseEmail(self.Email); err != nil {
-		errors["email"] = err.Error()
+	if self.CarreraID <= 0 {
+		errors["carrera_id"] = "Carrera es requerida"
 	}
 
-	if strings.TrimSpace(self.Carrera) == "" {
-		errors["carrera"] = "Carrera es requerida"
-	}
-
-	// TODO: Expandir los requisitos de una contrasena
-	if len(self.Password) < 6 {
-		errors["password"] = "La contraseña debe tener al menos 6 caracteres"
-	}
-
-	return errors
+	return nombre, errors
 }
 
 func (self *SignUpRequest) Validate() (Alumno, map[string]string) {
@@ -75,19 +63,19 @@ func (self *SignUpRequest) Validate() (Alumno, map[string]string) {
 		errors["password"] = err.Error()
 	}
 
-	if strings.TrimSpace(self.Carrera) == "" {
-		errors["carrera"] = "Carrera es requerida"
+	if self.CarreraID <= 0 {
+		errors["carrera_id"] = "Carrera es requerida"
 	}
 
 	return Alumno{
 		Nombre:   nombre,
 		Email:    email,
+		Carrera:  self.CarreraID,
 		Password: clave,
 	}, errors
 }
 
 type AlumnoRepository interface {
-	GetAll(ctx context.Context) ([]Alumno, error)
 	GetByID(ctx context.Context, id int64) (*Alumno, error)
 	GetByEmail(ctx context.Context, email string) (*Alumno, error)
 	Create(ctx context.Context, alumno *Alumno) error

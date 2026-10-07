@@ -1,6 +1,9 @@
 server:
   port: 8080
   loglevel: INFO
+  # Origenes permitidos para el frontend. En produccion se pisa con CORS_ORIGINS.
+  cors_origins:
+    - http://localhost:5173
   pool:
     max_open_conns: 25
     max_idle_conns: 5
@@ -14,11 +17,14 @@ database:
   password: chedul
   name: chedul-db
   require_ssl: false
+  # Aplica las migraciones pendientes al iniciar el servidor
+  auto_migrate: true
 
-jwt_secret: "secreto"
+uploads:
+  dir: uploads
+  max_size_mb: 25
 
 tracer_provider:
   service_name: "chedul-core"
   protocol: http/protobuf
-  api_key: "secreto"
   endpoint: "https://api.honeycomb.io"

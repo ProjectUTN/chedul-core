@@ -21,10 +21,26 @@ func NewMateriaHandler(repo domain.MateriaRepository, logger *zap.Logger) *Mater
 	}
 }
 
+// GetAll lista las materias con sus correlativas. Con ?carrera_id=N se
+// filtran las materias de esa carrera.
 func (h *MateriaHandler) GetAll(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	materias, err := h.repo.GetAll(ctx)
+	var (
+		materias []domain.Materia
+		err      error
+	)
+
+	if carreraParam := c.QueryParam("carrera_id"); carreraParam != "" {
+		carreraID, parseErr := strconv.ParseInt(carreraParam, 10, 64)
+		if parseErr != nil {
+			return InvalidRequestData(map[string]string{"carrera_id": "Debe ser un número"})
+		}
+		materias, err = h.repo.GetByCarrera(ctx, carreraID)
+	} else {
+		materias, err = h.repo.GetAll(ctx)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -35,9 +51,9 @@ func (h *MateriaHandler) GetAll(c echo.Context) error {
 func (h *MateriaHandler) GetByID(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := ParamID(c, "id")
 	if err != nil {
-		return InvalidJSON()
+		return err
 	}
 
 	materia, err := h.repo.GetByID(ctx, id)

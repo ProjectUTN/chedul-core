@@ -1,5 +1,6 @@
 bin/
 /backlogr
 scripts/spawn_postgres.sh
-scripts/spawn_postgres.sh
+uploads/
+*.log
 .env

@@ -18,22 +18,26 @@ func main() {
 
 	config, err := config.Load(configDir)
 	if err != nil {
-		log.Fatal("No se pudo leer la configuracion")
+		log.Fatalf("No se pudo leer la configuracion: %v", err)
 	}
 	config.PrettyPrint()
 
-	otelShutdown, err := otel.ConfigureOpenTelemetry(
-		otel.WithServiceName(config.TracerProvider.ServiceName),
-		otel.WithExporterProtocol(otel.Protocol(config.TracerProvider.Protocol)),
-		otel.WithExporterEndpoint(config.TracerProvider.Endpoint),
-		otel.WithHeaders(map[string]string{
-			"x-honeycomb-team": config.TracerProvider.ApiKey.Expose(),
-		}),
-	)
-	if err != nil {
-		log.Printf("error setting up OTel SDK - %e\n", err)
+	// Las trazas a Honeycomb son opcionales: solo se activan si hay api key
+	if config.TracingEnabled() {
+		otelShutdown, err := otel.ConfigureOpenTelemetry(
+			otel.WithServiceName(config.TracerProvider.ServiceName),
+			otel.WithExporterProtocol(otel.Protocol(config.TracerProvider.Protocol)),
+			otel.WithExporterEndpoint(config.TracerProvider.Endpoint),
+			otel.WithHeaders(map[string]string{
+				"x-honeycomb-team": config.TracerProvider.ApiKey.Expose(),
+			}),
+		)
+		if err != nil {
+			log.Printf("error setting up OTel SDK - %v\n", err)
+		} else {
+			defer otelShutdown()
+		}
 	}
-	defer otelShutdown()
 
 	server := server.Build(config)
 

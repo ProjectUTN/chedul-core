@@ -8,9 +8,9 @@ import (
 )
 
 type CondicionModel struct {
-	bun.BaseModel `bun:"table:carrera"`
-	ID            int64  `json:"id" bun:"id,pk,autoincrement"`
-	Nombre        string `json:"nombre" bun:"nombre,notnull,unique"`
+	bun.BaseModel `bun:"table:condicion"`
+	ID            int64  `bun:"id,pk,autoincrement"`
+	Condicion     string `bun:"condicion,notnull,unique"`
 }
 
 type condicionRepository struct {
@@ -23,7 +23,7 @@ func NewCondicionRepository(db *bun.DB) domain.CondicionRepository {
 
 func (r *condicionRepository) GetAll(ctx context.Context) ([]domain.Condicion, error) {
 	var model []CondicionModel
-	err := r.db.NewSelect().Model(&model).Order("nombre ASC").Scan(ctx)
+	err := r.db.NewSelect().Model(&model).Order("id ASC").Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +39,6 @@ func (r *condicionRepository) GetAll(ctx context.Context) ([]domain.Condicion, e
 func (r *condicionRepository) toDomain(model CondicionModel) domain.Condicion {
 	return domain.Condicion{
 		ID:        model.ID,
-		Condicion: model.Nombre,
+		Condicion: model.Condicion,
 	}
 }

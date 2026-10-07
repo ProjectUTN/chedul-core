@@ -1,16 +1,22 @@
+# Levanta la API y Postgres para desarrollo local:
+#   docker compose up --build
+# La API queda en http://localhost:8080 y aplica las migraciones al iniciar.
 services:
-  chedul-core: 
+  chedul-core:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
-      ALLOW_DB_ALIAS: true
       SERVER_ENV: development
+      ALLOW_DB_ALIAS: "true"
       DB_HOST: database
+      JWT_SECRET: ${JWT_SECRET:-secreto-solo-para-desarrollo}
       HONEYCOMB_API_KEY: ${HONEYCOMB_API_KEY:-}
-      JWT_SECRET: ${JWT_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
       - "8080:8080"
+    volumes:
+      - uploads:/uploads
     depends_on:
       - database
 
@@ -19,14 +25,13 @@ services:
     restart: always
     environment:
       POSTGRES_USER: chedul
-      POSTGRES_NAME: chedul-db
       POSTGRES_PASSWORD: chedul
       POSTGRES_DB: chedul-db
     ports:
-      - "7070:7070"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
   postgres_data:
-
+  uploads:

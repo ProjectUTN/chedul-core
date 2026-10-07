@@ -4,17 +4,19 @@ import (
 	"chedul-core/internals/server"
 	"chedul-core/pkg/config"
 	"chedul-core/pkg/logger"
+	"chedul-core/pkg/storage"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"time"
 
-	"net/http"
-
-	"github.com/labstack/echo/v4"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -25,6 +27,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+const MIGRATIONS_DIR = "../../migrations"
 
 type TestApp struct {
 	Address string
@@ -63,9 +67,9 @@ func WithConfig(cfg *config.AppConfig) SpawnOpts {
 func createTestConfig() *config.AppConfig {
 	return &config.AppConfig{
 		Server: config.ServerConfig{
-			Host:     "localhost",
+			Host:     "127.0.0.1",
 			Port:     0,
-			LogLevel: zapcore.InfoLevel,
+			LogLevel: zapcore.WarnLevel,
 		},
 		Database: config.DatabaseConfig{
 			User:       "user",
@@ -76,9 +80,10 @@ func createTestConfig() *config.AppConfig {
 		JwtSecret: config.NewSecret("test-jwt-secret-key"),
 		TracerProvider: config.HoneycombConfig{
 			ServiceName: "chedul-core-test",
-			Protocol:    "grpc",
-			Endpoint:    "api.honeycomb.io:443",
 			ApiKey:      config.NewSecret(""),
+		},
+		Uploads: config.UploadsConfig{
+			MaxSizeMB: 1,
 		},
 	}
 }
@@ -93,56 +98,54 @@ func SpawnApp(options ...SpawnOpts) (*TestApp, error) {
 
 	var testDB *bun.DB
 	if opts.withDB {
-		TestingDB, err := SetupPgContainer(opts.migrationsPath)
+		db, err := SetupTestDB(opts.migrationsPath)
 		if err != nil {
 			return nil, fmt.Errorf("No se pudo iniciar base de datos de prueba %w", err)
 		}
-		testDB = TestingDB.db
+		testDB = db
 	}
 
 	configuration := opts.config
 	configuration.Server.Port = 0
 
-	server := BuildWitDB(*configuration, testDB)
+	uploadsDir, err := os.MkdirTemp("", "chedul-uploads-*")
+	if err != nil {
+		return nil, err
+	}
+	configuration.Uploads.Dir = uploadsDir
 
-	address := server.Echo.Listener.Addr().String()
+	srv, err := BuildWithDB(*configuration, testDB)
+	if err != nil {
+		return nil, err
+	}
 
-	startupErr := make(chan error, 1)
+	address := srv.Echo.Listener.Addr().String()
 
 	go func() {
-		if err := server.Echo.Start(address); err != nil && err != http.ErrServerClosed {
-			server.Logger.Fatal("Fallo al iniciar servidor", zap.Error(err))
-			startupErr <- err
+		if err := srv.Echo.Start(address); err != nil && err != http.ErrServerClosed {
+			srv.Logger.Error("Fallo al iniciar servidor", zap.Error(err))
 		}
 	}()
 
-	select {
-	case err := <-startupErr:
-		return nil, fmt.Errorf("Fallo al iniciar servidor %w", err)
-	case <-time.After(100 * time.Millisecond):
-		if err := waitForServer(fmt.Sprintf("http://%s", address)); err != nil {
-			return nil, fmt.Errorf("El servidor no esta listo: %w", err)
-		}
+	if err := waitForServer(fmt.Sprintf("http://%s", address)); err != nil {
+		return nil, fmt.Errorf("El servidor no esta listo: %w", err)
 	}
 
 	return &TestApp{
 		Address: fmt.Sprintf("http://%s", address),
 		db:      testDB,
-		server:  server,
+		server:  srv,
 	}, nil
 }
 
 func waitForServer(address string) error {
 	client := &http.Client{Timeout: time.Second}
 
-	for range 30 {
+	for range 60 {
 		resp, err := client.Get(address + "/health")
 		if err == nil {
 			resp.Body.Close()
 			return nil
-		}
-		if resp != nil {
-			resp.Body.Close()
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -150,17 +153,36 @@ func waitForServer(address string) error {
 	return fmt.Errorf("El servidor no estuvo listo dentro del plazo")
 }
 
-type TestingDB struct {
-	container *postgres.PostgresContainer
-	db        *bun.DB
+// SetupTestDB crea una base de datos nueva y le aplica las migraciones.
+//
+// Si la variable TEST_DATABASE_URL apunta a un Postgres (por ejemplo el del
+// docker-compose), se crea una base con nombre aleatorio en ese servidor. Si
+// no, se levanta un contenedor con testcontainers (necesita Docker).
+func SetupTestDB(migrationPath string) (*bun.DB, error) {
+	connUri, err := testDatabaseUri()
+	if err != nil {
+		return nil, err
+	}
+
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connUri)))
+	db := bun.NewDB(sqldb, pgdialect.New())
+
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("postgres"); err != nil {
+		return nil, err
+	}
+	if err := goose.Up(sqldb, migrationPath); err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
-// Interesante considerar esta tecnica en vez de usar testcontainers si prueban ser un cuello de botella cuando tengamos muchos tests.
-// https://gajus.com/blog/setting-up-postgre-sql-for-running-integration-tests
-func SetupPgContainer(
-	// TODO: Resolver el tema de que se hardcodee
-	migrationPath string,
-) (*TestingDB, error) {
+func testDatabaseUri() (string, error) {
+	if base := os.Getenv("TEST_DATABASE_URL"); base != "" {
+		return createDatabaseOn(base)
+	}
+
 	ctx := context.Background()
 	container, err := postgres.Run(ctx,
 		"postgres:17-alpine",
@@ -171,32 +193,39 @@ func SetupPgContainer(
 			wait.
 				ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(5*time.Second)),
+				WithStartupTimeout(30*time.Second)),
 	)
-
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	connUri, err := container.ConnectionString(ctx, "sslmode=disable")
-
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connUri)))
-	db := bun.NewDB(sqldb, pgdialect.New())
-
-	goose.SetLogger(goose.NopLogger())
-	goose.SetDialect("postgres")
-	if err := goose.Up(sqldb, migrationPath); err != nil {
-		return nil, err
-	}
-
-	return &TestingDB{
-		container: container,
-		db:        db,
-	}, nil
+	return container.ConnectionString(ctx, "sslmode=disable")
 }
 
-// TODO: Refactorizar para usar el patron Opts, asi podemos definir si cargar el middleware, si cargar la db, etc.
-func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
+func createDatabaseOn(base string) (string, error) {
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", fmt.Errorf("TEST_DATABASE_URL invalida: %w", err)
+	}
+
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	name := "chedul_test_" + hex.EncodeToString(buf)
+
+	admin := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(base)))
+	defer admin.Close()
+
+	if _, err := admin.Exec(fmt.Sprintf(`CREATE DATABASE %q`, name)); err != nil {
+		return "", fmt.Errorf("no se pudo crear la base de prueba: %w", err)
+	}
+
+	u.Path = "/" + name
+	return u.String(), nil
+}
+
+func BuildWithDB(configuration config.AppConfig, db *bun.DB) (*server.Server, error) {
 	logger, err := logger.New(configuration.Server.LogLevel)
 	if err != nil {
 		log.Fatal("Error iniciando logger:", err)
@@ -204,70 +233,25 @@ func BuildWitDB(configuration config.AppConfig, db *bun.DB) *server.Server {
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
 	if err != nil {
-		log.Fatal("Fallo al unirse a un puerto aleatorio:", err)
+		return nil, fmt.Errorf("Fallo al unirse a un puerto aleatorio: %w", err)
 	}
 
-	host := configuration.Server.Host
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	api := echo.New()
-	api.Listener = listener
-	api.HideBanner = true
-	api.HidePort = true
-	api.HTTPErrorHandler = server.HttpErrorHandler
-
-	server := server.Server{
-		Echo:      api,
-		Host:      host,
-		JwtSecret: *configuration.JwtSecret,
-		Port:      port,
-		ConnPool:  db,
-		Logger:    logger,
+	files, err := storage.NewLocal(configuration.Uploads.Dir)
+	if err != nil {
+		return nil, err
 	}
 
-	// TODO: Add the middleware as an opt-in
-	// server.SetupMiddleware()
-	server.SetupRoutes()
+	srv := server.New(configuration, db, files, logger, listener)
+	srv.Echo.HTTPErrorHandler = server.HttpErrorHandler
+	srv.SetupRoutes()
 
-	return &server
-}
-
-func getConfigPath() (string, error) {
-	configPath := os.Getenv("CONFIG_DIR")
-	if configPath == "" {
-		return "", fmt.Errorf("CONFIG_DIR environment variable not set")
-	}
-
-	return "../" + configPath, nil
+	return srv, nil
 }
 
 func CreateTestApp() (*TestApp, error) {
-	testApp, err := SpawnApp(WithDB("../../migrations"))
-	if err != nil {
-		return nil, err
-	}
-
-	seedDatabase(testApp)
-
-	return testApp, nil
+	return SpawnApp(WithDB(MIGRATIONS_DIR))
 }
 
 func CreateTestAppWithConfig(cfg *config.AppConfig) (*TestApp, error) {
-	testApp, err := SpawnApp(WithDB("../../migrations"), WithConfig(cfg))
-	if err != nil {
-		return nil, err
-	}
-
-	seedDatabase(testApp)
-
-	return testApp, nil
-}
-
-func seedDatabase(testApp *TestApp) error {
-	_, err := testApp.db.Exec("INSERT INTO carrera(nombre) VALUES ('ISI'), ('Sistemas')")
-
-	if err != nil {
-		return err
-	}
-	return nil
+	return SpawnApp(WithDB(MIGRATIONS_DIR), WithConfig(cfg))
 }

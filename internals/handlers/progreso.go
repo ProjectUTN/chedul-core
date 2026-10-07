@@ -2,29 +2,31 @@ package handlers
 
 import (
 	"chedul-core/internals/domain"
-	"database/sql"
 	"fmt"
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
-	"github.com/uptrace/bun"
 )
 
-// TODO: Ver esto
+const (
+	condicionAprobada     = "Aprobada"
+	condicionRegularizada = "Regularizada"
+	condicionCursando     = "Cursando"
+	condicionPendiente    = "Pendiente"
+)
+
 type ProgresoHandler struct {
-	db                  *bun.DB
 	alumnoRepo          domain.AlumnoRepository
+	materiaRepo         domain.MateriaRepository
 	condicionAlumnoRepo domain.CondicionAlumnoRepository
-	condicionRepo       domain.CondicionRepository
 }
 
-func NewProgresoHandler(alumnoRepo domain.AlumnoRepository, condicionAlumnorepo domain.CondicionAlumnoRepository, condicionRepo domain.CondicionRepository, db *bun.DB) *ProgresoHandler {
+func NewProgresoHandler(alumnoRepo domain.AlumnoRepository, materiaRepo domain.MateriaRepository, condicionAlumnoRepo domain.CondicionAlumnoRepository) *ProgresoHandler {
 	return &ProgresoHandler{
-		db:                  db,
 		alumnoRepo:          alumnoRepo,
-		condicionAlumnoRepo: condicionAlumnorepo,
-		condicionRepo:       condicionRepo,
+		materiaRepo:         materiaRepo,
+		condicionAlumnoRepo: condicionAlumnoRepo,
 	}
 }
 
@@ -33,6 +35,7 @@ type MateriaSimple struct {
 	Nombre       string `json:"nombre"`
 	Nivel        int64  `json:"nivel"`
 	EstadoActual string `json:"estado_actual"`
+	Nota         *int   `json:"nota"`
 	Mensaje      string `json:"mensaje"`
 	Tipo         string `json:"tipo"`
 }
@@ -47,139 +50,137 @@ type ProgresoResponse struct {
 	ObligatoriasTotal               int             `json:"obligatorias_total"`
 	ObligatoriasAprobadas           int             `json:"obligatorias_aprobadas"`
 	PorcentajeAprobadas             float64         `json:"porcentaje_aprobadas"`
-	// Se pueden añadir más estadísticas como las electivas si es necesario.
+	Promedio                        *float64        `json:"promedio"`
 }
 
-func (h *ProgresoHandler) GetProgresoAlumno(c echo.Context) error {
-	ctx := c.Request().Context()
+// cumpleCorrelativa indica si la condicion del alumno en la materia requerida
+// alcanza para el tipo de correlativa.
+func cumpleCorrelativa(tipo, condicionRequerida string) bool {
+	switch tipo {
+	case domain.CorrelativaAprobada:
+		return condicionRequerida == condicionAprobada
+	case domain.CorrelativaRegular:
+		return condicionRequerida == condicionAprobada || condicionRequerida == condicionRegularizada
+	}
+	return false
+}
 
-	// 1. Obtener el ID del alumno desde la URL
-	alumnoID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return NewApiError(http.StatusBadRequest, fmt.Errorf("ID de alumno inválido"))
+// CalcularProgreso clasifica las materias de la carrera segun la condicion del
+// alumno y las correlativas de cada una.
+func CalcularProgreso(alumnoID int64, materias []domain.Materia, condiciones []domain.CondicionPorAlumno) ProgresoResponse {
+	resp := ProgresoResponse{
+		AlumnoID:                        alumnoID,
+		MateriasAprobadas:               []MateriaSimple{},
+		MateriasRegularizadas:           []MateriaSimple{},
+		MateriasCursando:                []MateriaSimple{},
+		MateriasPendientesDisponibles:   []MateriaSimple{},
+		MateriasPendientesNoDisponibles: []MateriaSimple{},
 	}
 
-	// 2. Obtener la carrera del alumno
-	alumno, err := h.alumnoRepo.GetByID(ctx, alumnoID)
-	if err != nil {
-		return err
-	}
-
-	// 3. Obtener TODAS las materias de la carrera del alumno
-	var materiasDeLaCarrera []domain.Materia
-	err = h.db.NewSelect().
-		Model(&materiasDeLaCarrera).
-		Join("JOIN materiasporcarrera AS mpc ON mpc.materia_id = materia.id").
-		Where("mpc.carrera_id = ?", alumno.Carrera).
-		Scan(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	// 4. Obtener TODOS los estados que el alumno ya tiene para esas materias
-	// TODO: CondicionPorAlumno o CondicionAlumno?
-	condicionDelAlumno, err := h.condicionAlumnoRepo.GetCondicionPorAlumno(ctx, alumnoID)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// 5. Pre-cargar datos para evitar consultas en bucle (N+1)
-	// Mapa de todas las condiciones (ID -> Nombre)
-	condiciones, err := h.condicionRepo.GetAll(ctx)
-	if err != nil {
-		return err
-	}
-
-	condicionesMap := make(map[int64]string)
+	estados := make(map[int64]domain.CondicionPorAlumno, len(condiciones))
 	for _, c := range condiciones {
-		condicionesMap[c.ID] = c.Condicion
+		estados[c.MateriaID] = c
 	}
 
-	type EstadoInfo struct {
-		Nombre string
-		Nota   *int
-	}
+	sumaNotas, cantidadNotas := 0, 0
 
-	estadosMap := make(map[int64]EstadoInfo)
-	for _, estado := range condicionDelAlumno {
-		estadosMap[estado.Materia.ID] = EstadoInfo{
-			Nombre: condicionesMap[estado.Condicion.ID],
-			Nota:   estado.Nota,
-		}
-	}
-
-	// Mapa de nombres de materias para mensajes de correlativas
-	nombresMateriasMap := make(map[int64]string)
-	for _, m := range materiasDeLaCarrera {
-		nombresMateriasMap[m.ID] = m.Nombre
-	}
-
-	// 6. Clasificar cada materia
-	var resp ProgresoResponse
-	resp.AlumnoID = alumnoID
-
-	for _, materia := range materiasDeLaCarrera {
-		materiaSimple := MateriaSimple{
+	for _, materia := range materias {
+		simple := MateriaSimple{
 			ID:     materia.ID,
 			Nombre: materia.Nombre,
 			Nivel:  materia.Nivel,
 			Tipo:   materia.Tipo,
 		}
 
-		if estado, ok := estadosMap[materia.ID]; ok {
-			// El alumno tiene un estado para esta materia
-			materiaSimple.EstadoActual = estado.Nombre
-			switch estado.Nombre {
-			case "Aprobada":
-				materiaSimple.Mensaje = "Ya aprobada"
-				resp.MateriasAprobadas = append(resp.MateriasAprobadas, materiaSimple)
-			case "Regularizada":
-				materiaSimple.Mensaje = "Regularizada"
-				resp.MateriasRegularizadas = append(resp.MateriasRegularizadas, materiaSimple)
-			case "Cursando":
-				materiaSimple.Mensaje = "Actualmente cursando"
-				resp.MateriasCursando = append(resp.MateriasCursando, materiaSimple)
-			}
-		} else {
-			// El alumno no tiene estado para esta materia (está pendiente)
-			materiaSimple.EstadoActual = "Pendiente"
-			puedeCursar := true
-			mensaje := "Disponible para cursar"
-
-			if materia.CorrelativaID != nil {
-				if estadoCorrelativa, correlativaExiste := estadosMap[*materia.CorrelativaID]; !correlativaExiste || estadoCorrelativa.Nombre != "Aprobada" {
-					puedeCursar = false
-					nombreCorrelativa := nombresMateriasMap[*materia.CorrelativaID]
-					mensaje = fmt.Sprintf("Necesita aprobar %s", nombreCorrelativa)
-				}
-			}
-
-			materiaSimple.Mensaje = mensaje
-			if puedeCursar {
-				resp.MateriasPendientesDisponibles = append(resp.MateriasPendientesDisponibles, materiaSimple)
-			} else {
-				resp.MateriasPendientesNoDisponibles = append(resp.MateriasPendientesNoDisponibles, materiaSimple)
-			}
-		}
-	}
-
-	// 7. Calcular estadísticas
-	for _, m := range materiasDeLaCarrera {
-		if m.Tipo == "Obligatoria" {
+		if materia.Tipo == "Obligatoria" {
 			resp.ObligatoriasTotal++
 		}
-	}
-	// Contar solo las aprobadas que son obligatorias
-	for _, aprobada := range resp.MateriasAprobadas {
-		if aprobada.Tipo == "Obligatoria" {
-			resp.ObligatoriasAprobadas++
+
+		if estado, ok := estados[materia.ID]; ok {
+			simple.EstadoActual = estado.Condicion
+			simple.Nota = estado.Nota
+
+			switch estado.Condicion {
+			case condicionAprobada:
+				simple.Mensaje = "Ya aprobada"
+				resp.MateriasAprobadas = append(resp.MateriasAprobadas, simple)
+				if materia.Tipo == "Obligatoria" {
+					resp.ObligatoriasAprobadas++
+				}
+				if estado.Nota != nil {
+					sumaNotas += *estado.Nota
+					cantidadNotas++
+				}
+			case condicionRegularizada:
+				simple.Mensaje = "Regularizada, falta el final"
+				resp.MateriasRegularizadas = append(resp.MateriasRegularizadas, simple)
+			case condicionCursando:
+				simple.Mensaje = "Actualmente cursando"
+				resp.MateriasCursando = append(resp.MateriasCursando, simple)
+			}
+			continue
+		}
+
+		simple.EstadoActual = condicionPendiente
+
+		var faltantes []string
+		for _, correlativa := range materia.Correlativas {
+			requerida := estados[correlativa.MateriaID].Condicion
+			if cumpleCorrelativa(correlativa.Tipo, requerida) {
+				continue
+			}
+
+			if correlativa.Tipo == domain.CorrelativaAprobada {
+				faltantes = append(faltantes, fmt.Sprintf("Necesita aprobar %s", correlativa.Nombre))
+			} else {
+				faltantes = append(faltantes, fmt.Sprintf("Necesita regularizar %s", correlativa.Nombre))
+			}
+		}
+
+		if len(faltantes) == 0 {
+			simple.Mensaje = "Disponible para cursar"
+			resp.MateriasPendientesDisponibles = append(resp.MateriasPendientesDisponibles, simple)
+		} else {
+			simple.Mensaje = strings.Join(faltantes, ". ")
+			resp.MateriasPendientesNoDisponibles = append(resp.MateriasPendientesNoDisponibles, simple)
 		}
 	}
 
 	if resp.ObligatoriasTotal > 0 {
-		resp.PorcentajeAprobadas = (float64(resp.ObligatoriasAprobadas) / float64(resp.ObligatoriasTotal)) * 100
+		resp.PorcentajeAprobadas = float64(resp.ObligatoriasAprobadas) / float64(resp.ObligatoriasTotal) * 100
 	}
 
-	return c.JSON(http.StatusOK, resp)
+	if cantidadNotas > 0 {
+		promedio := float64(sumaNotas) / float64(cantidadNotas)
+		resp.Promedio = &promedio
+	}
+
+	return resp
+}
+
+// GetMiProgreso devuelve el progreso del alumno autenticado en su carrera.
+func (h *ProgresoHandler) GetMiProgreso(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+
+	alumno, err := h.alumnoRepo.GetByID(ctx, alumnoID)
+	if err != nil {
+		return err
+	}
+
+	materias, err := h.materiaRepo.GetByCarrera(ctx, alumno.Carrera)
+	if err != nil {
+		return err
+	}
+
+	condiciones, err := h.condicionAlumnoRepo.GetCondicionPorAlumno(ctx, alumnoID)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, CalcularProgreso(alumnoID, materias, condiciones))
 }

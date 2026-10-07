@@ -1,0 +1,32 @@
+# Despliega la API en Cloud Run cada vez que se mergea a main.
+# No hace nada hasta que se configuren en el repo (Settings > Secrets and
+# variables > Actions):
+#   - variable GCP_PROJECT: el id del proyecto de Google Cloud
+#   - secret GCP_SA_KEY: la key JSON de una cuenta de servicio con permisos
+#     para desplegar (ver la guia de deploy en el README)
+name: deploy_cloud_run
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+concurrency:
+  group: deploy-cloud-run
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: vars.GCP_PROJECT != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy
+        run: |
+          gcloud run deploy chedul-api \
+            --project "${{ vars.GCP_PROJECT }}" \
+            --region "${{ vars.GCP_REGION || 'southamerica-east1' }}" \
+            --source . \
+            --quiet
