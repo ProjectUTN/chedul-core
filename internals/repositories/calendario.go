@@ -25,6 +25,7 @@ type ClaseModel struct {
 	ID            int64  `bun:"id,pk,autoincrement"`
 	AlumnoID      int64  `bun:"alumno_id,notnull"`
 	MateriaID     *int64 `bun:"materia_id"`
+	ComisionID    *int64 `bun:"comision_id"`
 	Titulo        string `bun:"titulo,notnull"`
 	Dia           int    `bun:"dia,notnull"`
 	HoraInicio    string `bun:"hora_inicio,notnull"`
@@ -67,10 +68,16 @@ type claseRow struct {
 	Aula          string         `bun:"aula"`
 	MateriaID     sql.NullInt64  `bun:"materia_id"`
 	MateriaNombre sql.NullString `bun:"materia_nombre"`
+	ComisionID    sql.NullInt64  `bun:"comision_id"`
 }
 
 func (row claseRow) toDomain() domain.Clase {
+	var comisionID *int64
+	if row.ComisionID.Valid {
+		comisionID = &row.ComisionID.Int64
+	}
 	return domain.Clase{
+		ComisionID: comisionID,
 		ID:         row.ID,
 		Titulo:     row.Titulo,
 		Dia:        row.Dia,
@@ -112,7 +119,7 @@ func (r *calendarioRepository) selectEventos(alumnoID int64) *bun.SelectQuery {
 func (r *calendarioRepository) selectClases(alumnoID int64) *bun.SelectQuery {
 	return r.db.NewSelect().
 		TableExpr("clase AS c").
-		ColumnExpr("c.id, c.titulo, c.dia, c.aula").
+		ColumnExpr("c.id, c.titulo, c.dia, c.aula, c.comision_id").
 		ColumnExpr("to_char(c.hora_inicio, 'HH24:MI') AS hora_inicio").
 		ColumnExpr("to_char(c.hora_fin, 'HH24:MI') AS hora_fin").
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
@@ -219,6 +226,7 @@ func (r *calendarioRepository) CreateClase(ctx context.Context, alumnoID int64, 
 	model := ClaseModel{
 		AlumnoID:   alumnoID,
 		MateriaID:  datos.MateriaID,
+		ComisionID: datos.ComisionID,
 		Titulo:     datos.Titulo,
 		Dia:        datos.Dia,
 		HoraInicio: datos.HoraInicio,

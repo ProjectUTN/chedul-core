@@ -52,6 +52,28 @@ func (h *CalendarioHandler) leerEvento(c echo.Context) (domain.DatosEvento, erro
 	return datos, nil
 }
 
+// La comision tiene que ser de la materia de la clase
+func (h *CalendarioHandler) validarComision(c echo.Context, materiaID, comisionID *int64, errs map[string]string) error {
+	if comisionID == nil {
+		return nil
+	}
+	if materiaID == nil {
+		errs["comision_id"] = "La comisión necesita una materia"
+		return nil
+	}
+	comisiones, err := h.materiaRepo.GetComisiones(c.Request().Context(), *materiaID)
+	if err != nil {
+		return err
+	}
+	for _, co := range comisiones {
+		if co.ID == *comisionID {
+			return nil
+		}
+	}
+	errs["comision_id"] = "La comisión no es de esa materia"
+	return nil
+}
+
 func (h *CalendarioHandler) leerClase(c echo.Context) (domain.DatosClase, error) {
 	var datos domain.DatosClase
 	if err := c.Bind(&datos); err != nil {
@@ -61,6 +83,9 @@ func (h *CalendarioHandler) leerClase(c echo.Context) (domain.DatosClase, error)
 	datos.Normalizar()
 	errs := datos.Validate()
 	if err := h.validarMateria(c, datos.MateriaID, errs); err != nil {
+		return datos, err
+	}
+	if err := h.validarComision(c, datos.MateriaID, datos.ComisionID, errs); err != nil {
 		return datos, err
 	}
 	if len(errs) > 0 {
