@@ -63,3 +63,25 @@ func (h *MateriaHandler) GetByID(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, materia)
 }
+
+// GetComisiones lista las comisiones de una materia con sus horarios, para
+// cargarlos de una al horario semanal.
+func (h *MateriaHandler) GetComisiones(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	id, err := ParamID(c, "id")
+	if err != nil {
+		return err
+	}
+
+	if _, err := h.repo.GetByID(ctx, id); err != nil {
+		return err
+	}
+
+	comisiones, err := h.repo.GetComisiones(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, comisiones)
+}

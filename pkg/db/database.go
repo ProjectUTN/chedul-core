@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"sync"
 	"time"
 
@@ -55,8 +56,36 @@ func Migrate(db *bun.DB) error {
 	return nil
 }
 
+// parametrosNoSoportados son opciones de libpq que pgdriver no entiende y
+// manda al servidor como parametros de sesion, que los rechaza. Neon, por
+// ejemplo, agrega channel_binding=require a la URL que muestra.
+var parametrosNoSoportados = []string{"channel_binding", "gssencmode"}
+
+// limpiarDSN saca de la URL de conexion los parametros que pgdriver no soporta.
+func limpiarDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil || u.RawQuery == "" {
+		return dsn
+	}
+
+	query := u.Query()
+	cambio := false
+	for _, p := range parametrosNoSoportados {
+		if query.Has(p) {
+			query.Del(p)
+			cambio = true
+		}
+	}
+	if !cambio {
+		return dsn
+	}
+
+	u.RawQuery = query.Encode()
+	return u.String()
+}
+
 func createConnection(config *config.AppConfig) (*bun.DB, error) {
-	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(config.DatabaseUrl())))
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(limpiarDSN(config.DatabaseUrl()))))
 
 	poolConfig := config.Server.Pool
 
