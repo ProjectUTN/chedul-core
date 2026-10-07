@@ -5,7 +5,7 @@ import (
 	"chedul-core/internals/repositories"
 	"chedul-core/pkg/config"
 	"chedul-core/pkg/db"
-	"chedul-core/pkg/util"
+	"chedul-core/pkg/storage"
 	"net"
 
 	"chedul-core/pkg/logger"
@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/uptrace/bun"
 
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
@@ -39,8 +40,12 @@ type Server struct {
 	JwtSecret config.Secret
 	ConnPool  *bun.DB
 	Logger    *zap.Logger
+	Storage   storage.Storage
+	Config    config.AppConfig
 }
 
+// Build arma el servidor a partir de la configuracion: conecta la base,
+// aplica las migraciones si corresponde y abre el puerto.
 func Build(configuration config.AppConfig) *Server {
 
 	logger, err := logger.New(configuration.Server.LogLevel)
@@ -53,32 +58,48 @@ func Build(configuration config.AppConfig) *Server {
 		logger.Fatal("Error al conectar con la DB", zap.Error(err))
 	}
 
+	if configuration.Database.AutoMigrate {
+		if err := db.Migrate(connPool); err != nil {
+			logger.Fatal("Error al aplicar las migraciones", zap.Error(err))
+		}
+	}
+
+	files, err := storage.NewLocal(configuration.Uploads.Dir)
+	if err != nil {
+		logger.Fatal("Error al preparar el directorio de archivos", zap.Error(err))
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", configuration.Server.Host, configuration.Server.Port))
 	if err != nil {
 		log.Fatalf("Fallo al unirse al puerto:%d. err: %s ", configuration.Server.Port, err.Error())
 	}
 
-	host := configuration.Server.Host
-	port := listener.Addr().(*net.TCPAddr).Port
+	server := New(configuration, connPool, files, logger, listener)
+	server.SetupMiddleware()
+	server.SetupRoutes()
 
+	return server
+}
+
+// New crea el servidor con dependencias ya construidas. Lo usan Build y los
+// tests de integracion.
+func New(configuration config.AppConfig, connPool *bun.DB, files storage.Storage, logger *zap.Logger, listener net.Listener) *Server {
 	api := echo.New()
 	api.Listener = listener
 	api.HideBanner = true
 	api.HidePort = true
 	api.HTTPErrorHandler = HttpErrorHandler
 
-	server := Server{
+	return &Server{
 		Echo:      api,
-		Host:      host,
+		Host:      configuration.Server.Host,
 		JwtSecret: *configuration.JwtSecret,
-		Port:      port,
+		Port:      listener.Addr().(*net.TCPAddr).Port,
 		ConnPool:  connPool,
 		Logger:    logger,
+		Storage:   files,
+		Config:    configuration,
 	}
-	server.SetupMiddleware()
-	server.SetupRoutes()
-
-	return &server
 }
 
 func (s *Server) printBanner() {
@@ -134,13 +155,15 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) SetupMiddleware() {
-	if util.IsEnvProd() {
+	if s.Config.TracingEnabled() {
 		s.Echo.Use(otelecho.Middleware("chedul-core"))
 	}
 
 	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-core"))
-	s.Echo.Use(CORSMiddleware())
+	s.Echo.Use(CORSMiddleware(s.Config.Server.CorsOrigins))
 	s.Echo.Use(RecoverMiddleware(s.Logger))
+	// Un poco mas que el maximo de archivo para dejar lugar al resto del formulario
+	s.Echo.Use(middleware.BodyLimit(fmt.Sprintf("%dM", s.Config.Uploads.MaxSizeMB+1)))
 }
 
 func (s *Server) SetupRoutes() {
@@ -153,42 +176,69 @@ func (s *Server) SetupRoutes() {
 	materiaRepo := repositories.NewMateriaRepository(s.ConnPool)
 	condicionRepo := repositories.NewCondicionRepository(s.ConnPool)
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.ConnPool)
+	aporteRepo := repositories.NewAporteRepository(s.ConnPool)
+	calendarioRepo := repositories.NewCalendarioRepository(s.ConnPool)
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.Logger)
 	materiaHandler := handlers.NewMateriaHandler(materiaRepo, s.Logger)
 	condicionHandler := handlers.NewCondicionHandler(condicionRepo, s.Logger)
-	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandle(condicionAlumnoRepo, s.Logger)
-	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, condicionAlumnoRepo, condicionRepo, s.ConnPool)
+	condicionAlumnoHandler := handlers.NewCondicionAlumnoHandler(condicionAlumnoRepo, condicionRepo, materiaRepo, s.Logger)
+	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, materiaRepo, condicionAlumnoRepo)
+	aporteHandler := handlers.NewAporteHandler(aporteRepo, materiaRepo, s.Storage, s.Config.Uploads.MaxSizeMB, s.Logger)
+	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
 
 	api := s.Echo.Group("/api/v1")
 
+	// Rutas publicas
 	api.POST("/signup", alumnoHandler.SignUp)
 	api.POST("/login", alumnoHandler.LogIn)
+	api.POST("/logout", alumnoHandler.LogOut)
 	api.POST("/refresh-token", alumnoHandler.RefreshToken)
 
+	api.GET("/carreras", carreraHandler.GetAll)
+	api.GET("/carreras/:id", carreraHandler.GetByID)
+
+	api.GET("/materias", materiaHandler.GetAll)
+	api.GET("/materias/:id", materiaHandler.GetByID)
+
+	api.GET("/condicion", condicionHandler.GetAll)
+
+	// Rutas que requieren iniciar sesion
 	protectedAPI := api.Group("")
 	protectedAPI.Use(RequireAuthMiddleware(s.JwtSecret.Expose(), s.Logger))
 
-	alumnos := protectedAPI.Group("/alumnos")
-	alumnos.GET("", alumnoHandler.GetAll)
-	alumnos.GET("/:id", alumnoHandler.GetByID)
-	alumnos.PUT("/:id", alumnoHandler.Update)
-	alumnos.DELETE("/:id", alumnoHandler.Delete)
-	alumnos.GET("/progreso/:id", progresoHandler.GetProgresoAlumno)
+	me := protectedAPI.Group("/alumnos/me")
+	me.GET("", alumnoHandler.GetMe)
+	me.PUT("", alumnoHandler.UpdateMe)
+	me.DELETE("", alumnoHandler.DeleteMe)
+	me.GET("/progreso", progresoHandler.GetMiProgreso)
 
-	carreras := api.Group("/carreras")
-	carreras.GET("", carreraHandler.GetAll)
-	carreras.GET("/:id", carreraHandler.GetByID)
+	condicionAlumno := protectedAPI.Group("/condicion_alumno")
+	condicionAlumno.GET("", condicionAlumnoHandler.GetMisCondiciones)
+	condicionAlumno.PUT("/:materia_id", condicionAlumnoHandler.SetCondicion)
+	condicionAlumno.DELETE("/:materia_id", condicionAlumnoHandler.DeleteCondicion)
 
-	materias := api.Group("/materias")
-	materias.GET("", materiaHandler.GetAll)
-	materias.GET("/:id", materiaHandler.GetByID)
+	aportes := protectedAPI.Group("/aportes")
+	aportes.GET("", aporteHandler.List)
+	aportes.POST("", aporteHandler.Create)
+	aportes.GET("/tags", aporteHandler.Tags)
+	aportes.GET("/:id", aporteHandler.Get)
+	aportes.PUT("/:id", aporteHandler.Update)
+	aportes.DELETE("/:id", aporteHandler.Delete)
+	aportes.GET("/:id/archivo", aporteHandler.Descargar)
+	aportes.POST("/:id/favorito", aporteHandler.AgregarFavorito)
+	aportes.DELETE("/:id/favorito", aporteHandler.QuitarFavorito)
 
-	condicion := api.Group("/condicion")
-	condicion.GET("", condicionHandler.GetAll)
+	eventos := protectedAPI.Group("/eventos")
+	eventos.GET("", calendarioHandler.ListEventos)
+	eventos.POST("", calendarioHandler.CreateEvento)
+	eventos.PUT("/:id", calendarioHandler.UpdateEvento)
+	eventos.DELETE("/:id", calendarioHandler.DeleteEvento)
 
-	condicion_alumno := api.Group("/condicion_alumno")
-	condicion_alumno.GET("/:id", condicionAlumnoHandler.GetCondicionPorAlumno)
-	condicion_alumno.POST("", condicionAlumnoHandler.SetCondicionAlumno)
+	clases := protectedAPI.Group("/clases")
+	clases.GET("", calendarioHandler.ListClases)
+	clases.POST("", calendarioHandler.CreateClase)
+	clases.PUT("/:id", calendarioHandler.UpdateClase)
+	clases.DELETE("/:id", calendarioHandler.DeleteClase)
 }

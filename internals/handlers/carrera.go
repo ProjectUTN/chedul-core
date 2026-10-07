@@ -3,7 +3,6 @@ package handlers
 import (
 	"chedul-core/internals/domain"
 	"net/http"
-	"strconv"
 
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
@@ -35,15 +34,13 @@ func (h *CarreraHandler) GetAll(c echo.Context) error {
 func (h *CarreraHandler) GetByID(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	id, err := ParamID(c, "id")
 	if err != nil {
-		return InvalidJSON()
+		return err
 	}
 
 	carrera, err := h.repo.GetByID(ctx, id)
 	if err != nil {
-
-		h.logger.Error("failed to get carrera", zap.Error(err), zap.Int64("id", id))
 		return err
 	}
 

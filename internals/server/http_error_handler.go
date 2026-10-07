@@ -2,6 +2,8 @@ package server
 
 import (
 	"chedul-core/internals/handlers"
+	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,24 +14,26 @@ func HttpErrorHandler(err error, c echo.Context) {
 		return
 	}
 
-	if apiErr, ok := err.(handlers.ApiError); ok {
+	var apiErr handlers.ApiError
+	var httpErr *echo.HTTPError
+
+	switch {
+	case errors.As(err, &apiErr):
 		c.JSON(apiErr.StatusCode, apiErr)
-	} else if httpErr, ok := err.(*echo.HTTPError); ok {
-		errResp := map[string]any{
+	case errors.As(err, &httpErr):
+		c.JSON(httpErr.Code, map[string]any{
 			"statusCode": httpErr.Code,
 			"msg":        httpErr.Message,
-		}
-		c.JSON(httpErr.Code, errResp)
-	} else {
-		errResp := map[string]any{
+		})
+	case errors.Is(err, sql.ErrNoRows):
+		c.JSON(http.StatusNotFound, map[string]any{
+			"statusCode": http.StatusNotFound,
+			"msg":        "no encontrado",
+		})
+	default:
+		c.JSON(http.StatusInternalServerError, map[string]any{
 			"statusCode": http.StatusInternalServerError,
 			"msg":        "internal server error",
-		}
-		c.JSON(http.StatusInternalServerError, errResp)
+		})
 	}
-
-	// TODO: Molesta a la hora de ver el output de los tests. Deshabilitar
-	// durante tests sin overhead
-	// c.Logger().Error("HTTP API Error ", "err ", err.Error(), "path ", c.Request().URL.Path)
-
 }

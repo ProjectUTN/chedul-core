@@ -1,8 +1,8 @@
 package db
 
 import (
+	"chedul-core/migrations"
 	"chedul-core/pkg/config"
-	"chedul-core/pkg/util"
 	"context"
 	"database/sql"
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -18,23 +19,40 @@ import (
 
 var once sync.Once
 
-func Open(config *config.AppConfig) (*bun.DB, error) {
+func Open(cfg *config.AppConfig) (*bun.DB, error) {
 	var err error
 
 	var db *bun.DB
 	once.Do(func() {
-		db, err = createConnection(config)
+		db, err = createConnection(cfg)
 	})
 
 	if err != nil {
 		return nil, err
 	}
 
-	if !util.IsEnvProd() {
+	if !config.IsProd() {
 		db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
 	}
 
 	return db, err
+}
+
+// Migrate aplica todas las migraciones pendientes usando los archivos SQL
+// embebidos en el binario.
+func Migrate(db *bun.DB) error {
+	goose.SetBaseFS(migrations.FS)
+	defer goose.SetBaseFS(nil)
+
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+
+	if err := goose.Up(db.DB, "."); err != nil {
+		return fmt.Errorf("error aplicando migraciones: %w", err)
+	}
+
+	return nil
 }
 
 func createConnection(config *config.AppConfig) (*bun.DB, error) {

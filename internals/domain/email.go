@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/mail"
+	"strings"
 )
 
 type Email struct {
@@ -11,13 +12,14 @@ type Email struct {
 }
 
 func ParseEmail(s string) (Email, error) {
-	addr, err := mail.ParseAddress(s)
+	addr, err := mail.ParseAddress(strings.TrimSpace(s))
 
 	if err != nil {
 		return Email{}, fmt.Errorf("formato invalido: %v", err)
 	}
 
-	return Email{value: addr.Address}, nil
+	// Se guarda en minusculas para que el login no dependa de como se escribio
+	return Email{value: strings.ToLower(addr.Address)}, nil
 }
 
 func (e *Email) String() string {

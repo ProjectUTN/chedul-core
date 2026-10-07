@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,13 +34,20 @@ type AppConfig struct {
 	Database       DatabaseConfig  `json:"database"`
 	JwtSecret      *Secret         `json:"jwt_secret" mapstructure:"jwt_secret"`
 	TracerProvider HoneycombConfig `json:"tracer_provider" mapstructure:"tracer_provider"`
+	Uploads        UploadsConfig   `json:"uploads"`
 }
 
 type ServerConfig struct {
-	Host     string            `json:"host"`
-	Port     int               `json:"port"`
-	LogLevel zapcore.Level     `json:"log_level"`
-	Pool     *ConnectionConfig `json:"pool"`
+	Host        string            `json:"host"`
+	Port        int               `json:"port"`
+	LogLevel    zapcore.Level     `json:"log_level"`
+	Pool        *ConnectionConfig `json:"pool"`
+	CorsOrigins []string          `json:"cors_origins" mapstructure:"cors_origins"`
+}
+
+type UploadsConfig struct {
+	Dir       string `json:"dir"`
+	MaxSizeMB int64  `json:"max_size_mb" mapstructure:"max_size_mb"`
 }
 
 type HoneycombConfig struct {
@@ -56,6 +64,10 @@ type DatabaseConfig struct {
 	Password   *Secret `json:"password"`
 	Name       string  `json:"name"`
 	RequireSsl bool    `json:"require_ssl" mapstructure:"require_ssl"`
+	// Url, si esta definida (variable DATABASE_URL), reemplaza al resto de los campos.
+	// Es lo que entregan los Postgres administrados (Neon, Supabase, Railway, etc).
+	Url         *Secret `json:"url"`
+	AutoMigrate bool    `json:"auto_migrate" mapstructure:"auto_migrate"`
 }
 
 type Duration time.Duration
@@ -129,8 +141,36 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 		c.Database.Host = dbHost
 	}
 
+	if dbPassword := os.Getenv("DB_PASSWORD"); dbPassword != "" {
+		c.Database.Password = NewSecret(dbPassword)
+	}
+
+	if dbUrl := os.Getenv("DATABASE_URL"); dbUrl != "" {
+		c.Database.Url = NewSecret(dbUrl)
+	}
+
 	if apiHost := os.Getenv("API_HOST"); apiHost != "" {
 		c.Server.Host = apiHost
+	}
+
+	// La mayoria de los hostings (Fly, Render, Railway) indican el puerto con PORT
+	if port := os.Getenv("PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			c.Server.Port = p
+		}
+	}
+
+	if origins := os.Getenv("CORS_ORIGINS"); origins != "" {
+		c.Server.CorsOrigins = nil
+		for _, o := range strings.Split(origins, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				c.Server.CorsOrigins = append(c.Server.CorsOrigins, o)
+			}
+		}
+	}
+
+	if dir := os.Getenv("UPLOADS_DIR"); dir != "" {
+		c.Uploads.Dir = dir
 	}
 
 	return c
@@ -148,7 +188,7 @@ func (c *AppConfig) validate() error {
 		errs = append(errs, fmt.Errorf("server.host invalido %q: debe ser una IP valida", c.Server.Host))
 	}
 
-	if net.ParseIP(c.Database.Host) == nil && os.Getenv("ALLOW_DB_ALIAS") != "true" {
+	if c.Database.Url.Expose() == "" && net.ParseIP(c.Database.Host) == nil && os.Getenv("ALLOW_DB_ALIAS") != "true" {
 		errs = append(errs, fmt.Errorf("database.host invalido %q: debe ser una IP valida", c.Database.Host))
 	}
 
@@ -208,29 +248,49 @@ func Load(configDir string) (AppConfig, error) {
 		config.Server.Pool = DefaultConnectionConfig()
 	}
 
+	if config.Uploads.Dir == "" {
+		config.Uploads.Dir = "uploads"
+	}
+	if config.Uploads.MaxSizeMB <= 0 {
+		config.Uploads.MaxSizeMB = 25
+	}
+
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		return AppConfig{}, fmt.Errorf("'JWT_SECRET' no puede ser leida correctamente")
 	}
-
-	honeyApiKey := os.Getenv("HONEYCOMB_API_KEY")
-	if honeyApiKey == "" {
-		return AppConfig{}, fmt.Errorf("'HONEYCOMB_API_KEY' no puede ser leida correctamente")
+	if IsProd() && len(jwtSecret) < 32 {
+		return AppConfig{}, fmt.Errorf("'JWT_SECRET' debe tener al menos 32 caracteres en produccion")
 	}
 
 	config.JwtSecret = NewSecret(jwtSecret)
-	config.TracerProvider.ApiKey = NewSecret(honeyApiKey)
+	// Honeycomb es opcional: sin api key no se exportan trazas
+	config.TracerProvider.ApiKey = NewSecret(os.Getenv("HONEYCOMB_API_KEY"))
 
 	return config, nil
 }
 
+func (self *AppConfig) TracingEnabled() bool {
+	return self.TracerProvider.ApiKey.Expose() != ""
+}
+
 func (self *AppConfig) DatabaseUrl() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+	if url := self.Database.Url.Expose(); url != "" {
+		return url
+	}
+
+	sslmode := "disable"
+	if self.Database.RequireSsl {
+		sslmode = "require"
+	}
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		self.Database.User,
 		self.Database.Password.Expose(),
 		self.Database.Host,
 		self.Database.Port,
 		self.Database.Name,
+		sslmode,
 	)
 }
 
