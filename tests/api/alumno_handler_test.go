@@ -7,8 +7,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-
-
 type AlumnoHandlerSuite struct {
 	suite.Suite
 	app *TestApp
