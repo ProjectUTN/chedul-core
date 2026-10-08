@@ -191,7 +191,21 @@ func (d *DatosClase) Validate() map[string]string {
 	return errs
 }
 
+// FechaAcademica es una fecha del calendario de la facultad, igual para todos
+// los alumnos: mesas de examen, feriados, inicio y fin de cuatrimestre.
+// Desde y Hasta son AAAA-MM-DD; en las de un solo dia son iguales.
+type FechaAcademica struct {
+	ID     int64  `json:"id"`
+	Titulo string `json:"titulo"`
+	Tipo   string `json:"tipo"`
+	Desde  string `json:"desde"`
+	Hasta  string `json:"hasta"`
+}
+
 type CalendarioRepository interface {
+	// ListFechasAcademicas devuelve las fechas que se pisan con el rango.
+	ListFechasAcademicas(ctx context.Context, desde, hasta string) ([]FechaAcademica, error)
+
 	ListEventos(ctx context.Context, alumnoID int64, desde, hasta string) ([]Evento, error)
 	GetEvento(ctx context.Context, alumnoID, id int64) (*Evento, error)
 	CreateEvento(ctx context.Context, alumnoID int64, datos DatosEvento) (int64, error)

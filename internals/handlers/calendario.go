@@ -94,14 +94,8 @@ func (h *CalendarioHandler) leerClase(c echo.Context) (domain.DatosClase, error)
 	return datos, nil
 }
 
-// ListEventos devuelve los eventos del alumno entre desde y hasta (inclusive),
-// con formato AAAA-MM-DD.
-func (h *CalendarioHandler) ListEventos(c echo.Context) error {
-	alumnoID, err := AlumnoID(c)
-	if err != nil {
-		return err
-	}
-
+// leerRango valida los parametros desde y hasta (AAAA-MM-DD) de un listado.
+func leerRango(c echo.Context) (string, string, error) {
 	desdeStr, hastaStr := c.QueryParam("desde"), c.QueryParam("hasta")
 	errs := make(map[string]string)
 	desde, err := time.Parse(domain.FormatoFecha, desdeStr)
@@ -121,7 +115,36 @@ func (h *CalendarioHandler) ListEventos(c echo.Context) error {
 		}
 	}
 	if len(errs) > 0 {
-		return InvalidRequestData(errs)
+		return "", "", InvalidRequestData(errs)
+	}
+	return desdeStr, hastaStr, nil
+}
+
+// ListFechasAcademicas devuelve el calendario de la facultad en el rango pedido.
+func (h *CalendarioHandler) ListFechasAcademicas(c echo.Context) error {
+	desde, hasta, err := leerRango(c)
+	if err != nil {
+		return err
+	}
+
+	fechas, err := h.repo.ListFechasAcademicas(c.Request().Context(), desde, hasta)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, fechas)
+}
+
+// ListEventos devuelve los eventos del alumno entre desde y hasta (inclusive),
+// con formato AAAA-MM-DD.
+func (h *CalendarioHandler) ListEventos(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+
+	desdeStr, hastaStr, err := leerRango(c)
+	if err != nil {
+		return err
 	}
 
 	eventos, err := h.repo.ListEventos(c.Request().Context(), alumnoID, desdeStr, hastaStr)

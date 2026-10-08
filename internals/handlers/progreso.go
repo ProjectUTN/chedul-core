@@ -51,6 +51,68 @@ type ProgresoResponse struct {
 	ObligatoriasAprobadas           int             `json:"obligatorias_aprobadas"`
 	PorcentajeAprobadas             float64         `json:"porcentaje_aprobadas"`
 	Promedio                        *float64        `json:"promedio"`
+	Ordenanza531                    Ordenanza531    `json:"ordenanza_531"`
+}
+
+// Ordenanza531 dice si el alumno puede pedir la excepcion de correlativas del
+// punto 5.3.1 del Reglamento de Estudios (Ord. 1549, modificada por la 1872):
+// si las materias que le faltan aprobar no superan la carga horaria del ultimo
+// nivel, las cursa sin correlativas (para rendir el final si se piden).
+// Las electivas y las que no tienen cursado (la Practica Supervisada) no se
+// cuentan, porque no se sabe cuales va a elegir el alumno.
+type Ordenanza531 struct {
+	Puede          bool            `json:"puede"`
+	HorasFaltantes float64         `json:"horas_faltantes"`
+	HorasLimite    float64         `json:"horas_limite"`
+	Faltantes      []MateriaSimple `json:"faltantes"`
+}
+
+const tipoObligatoria = "Obligatoria"
+
+// cuentaPara531 indica si la materia entra en la cuenta: obligatoria y con cursado.
+func cuentaPara531(m domain.Materia) bool {
+	return m.Tipo == tipoObligatoria && m.CargaHoraria > 0
+}
+
+// CalcularOrdenanza531 compara las horas de las obligatorias sin aprobar con
+// las del ultimo nivel de la carrera.
+func CalcularOrdenanza531(materias []domain.Materia, estados map[int64]domain.CondicionPorAlumno) Ordenanza531 {
+	resp := Ordenanza531{Faltantes: []MateriaSimple{}}
+
+	var ultimoNivel int64
+	for _, m := range materias {
+		if cuentaPara531(m) && m.Nivel > ultimoNivel {
+			ultimoNivel = m.Nivel
+		}
+	}
+
+	for _, m := range materias {
+		if !cuentaPara531(m) {
+			continue
+		}
+		if m.Nivel == ultimoNivel {
+			resp.HorasLimite += m.Horas
+		}
+		estado := estados[m.ID]
+		if estado.Condicion == condicionAprobada {
+			continue
+		}
+		resp.HorasFaltantes += m.Horas
+		condicion := estado.Condicion
+		if condicion == "" {
+			condicion = condicionPendiente
+		}
+		resp.Faltantes = append(resp.Faltantes, MateriaSimple{
+			ID:           m.ID,
+			Nombre:       m.Nombre,
+			Nivel:        m.Nivel,
+			EstadoActual: condicion,
+			Tipo:         m.Tipo,
+		})
+	}
+
+	resp.Puede = resp.HorasLimite > 0 && resp.HorasFaltantes > 0 && resp.HorasFaltantes <= resp.HorasLimite
+	return resp
 }
 
 // cumpleCorrelativa indica si la condicion del alumno en la materia requerida
@@ -92,7 +154,7 @@ func CalcularProgreso(alumnoID int64, materias []domain.Materia, condiciones []d
 			Tipo:   materia.Tipo,
 		}
 
-		if materia.Tipo == "Obligatoria" {
+		if materia.Tipo == tipoObligatoria {
 			resp.ObligatoriasTotal++
 		}
 
@@ -104,7 +166,7 @@ func CalcularProgreso(alumnoID int64, materias []domain.Materia, condiciones []d
 			case condicionAprobada:
 				simple.Mensaje = "Ya aprobada"
 				resp.MateriasAprobadas = append(resp.MateriasAprobadas, simple)
-				if materia.Tipo == "Obligatoria" {
+				if materia.Tipo == tipoObligatoria {
 					resp.ObligatoriasAprobadas++
 				}
 				if estado.Nota != nil {
@@ -154,6 +216,8 @@ func CalcularProgreso(alumnoID int64, materias []domain.Materia, condiciones []d
 		promedio := float64(sumaNotas) / float64(cantidadNotas)
 		resp.Promedio = &promedio
 	}
+
+	resp.Ordenanza531 = CalcularOrdenanza531(materias, estados)
 
 	return resp
 }

@@ -240,6 +240,8 @@ func (s *Server) SetupRoutes() {
 	eventos.PUT("/:id", calendarioHandler.UpdateEvento)
 	eventos.DELETE("/:id", calendarioHandler.DeleteEvento)
 
+	protectedAPI.GET("/calendario-academico", calendarioHandler.ListFechasAcademicas)
+
 	clases := protectedAPI.Group("/clases")
 	clases.GET("", calendarioHandler.ListClases)
 	clases.POST("", calendarioHandler.CreateClase)

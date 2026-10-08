@@ -152,6 +152,19 @@ func (r *calendarioRepository) ListEventos(ctx context.Context, alumnoID int64, 
 	return eventos, nil
 }
 
+func (r *calendarioRepository) ListFechasAcademicas(ctx context.Context, desde, hasta string) ([]domain.FechaAcademica, error) {
+	fechas := []domain.FechaAcademica{}
+	err := r.db.NewSelect().
+		TableExpr("fecha_academica").
+		ColumnExpr("id, titulo, tipo").
+		ColumnExpr("to_char(desde, 'YYYY-MM-DD') AS desde").
+		ColumnExpr("to_char(hasta, 'YYYY-MM-DD') AS hasta").
+		Where("desde <= ?::date AND hasta >= ?::date", hasta, desde).
+		OrderExpr("desde ASC, id ASC").
+		Scan(ctx, &fechas)
+	return fechas, err
+}
+
 func (r *calendarioRepository) GetEvento(ctx context.Context, alumnoID, id int64) (*domain.Evento, error) {
 	var rows []eventoRow
 	if err := r.selectEventos(alumnoID).Where("e.id = ?", id).Scan(ctx, &rows); err != nil {
