@@ -314,3 +314,94 @@ func (s *CalendarioHandlerSuite) TestLinkDeCalendario() {
 	s.Equal(http.StatusNotFound, anonimo.Do("GET", "/calendario/ics/"+sus.Token+".ics", nil, "").Status)
 	s.Equal(http.StatusOK, anonimo.Do("GET", "/calendario/ics/"+otra.Token+".ics", nil, "").Status)
 }
+
+type eventoConfirmadoTest struct {
+	Materia struct {
+		ID int64 `json:"id"`
+	} `json:"materia"`
+	ComisionID     int64   `json:"comision_id"`
+	Tipo           string  `json:"tipo"`
+	Fecha          string  `json:"fecha"`
+	Hora           *string `json:"hora"`
+	Confirmaciones int     `json:"confirmaciones"`
+}
+
+func (s *CalendarioHandlerSuite) confirmados(c *Client) []eventoConfirmadoTest {
+	resp := c.JSON("GET", "/eventos/confirmados", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var lista []eventoConfirmadoTest
+	resp.JSON(s.T(), &lista)
+	return lista
+}
+
+func (s *CalendarioHandlerSuite) TestEventosConfirmadosPorLaComision() {
+	nuevo := func(email string) *Client {
+		c := NewClient(s.T(), s.app)
+		c.Registrar("Alumno", email)
+		return c
+	}
+	primero := nuevo("uno.confirmado@chedul.com")
+	so := primero.MateriaID("isi-so")
+	resp := primero.JSON("GET", ruta("/materias/%d/comisiones", so), nil)
+	var comisiones []struct {
+		ID int64 `json:"id"`
+	}
+	resp.JSON(s.T(), &comisiones)
+	s.Require().GreaterOrEqual(len(comisiones), 2)
+
+	cursar := func(c *Client, comision int64) {
+		r := c.JSON("POST", "/clases", map[string]any{"titulo": "SO", "dia": 2, "hora_inicio": "18:00", "hora_fin": "20:00", "materia_id": so, "comision_id": comision})
+		s.Require().Equal(http.StatusCreated, r.Status, string(r.Body))
+	}
+	parcial := func(c *Client, fecha string) {
+		r := c.JSON("POST", "/eventos", map[string]any{"titulo": "Parcial SO", "tipo": "parcial", "fecha": fecha, "hora": "18:00", "materia_id": so})
+		s.Require().Equal(http.StatusCreated, r.Status, string(r.Body))
+	}
+
+	alumnos := []*Client{primero, nuevo("dos.confirmado@chedul.com"), nuevo("tres.confirmado@chedul.com")}
+	yo := nuevo("yo.confirmado@chedul.com")
+	otraComision := nuevo("otra.confirmado@chedul.com")
+	for _, c := range append(alumnos, yo) {
+		cursar(c, comisiones[0].ID)
+	}
+	cursar(otraComision, comisiones[1].ID)
+
+	// Con dos no alcanza, y uno de otra comision o con otra fecha no suma
+	parcial(alumnos[0], "2099-05-20")
+	parcial(alumnos[1], "2099-05-20")
+	parcial(otraComision, "2099-05-20")
+	parcial(alumnos[2], "2099-05-21")
+	s.Empty(s.confirmados(yo))
+
+	parcial(alumnos[2], "2099-05-20")
+	lista := s.confirmados(yo)
+	s.Require().Len(lista, 1)
+	s.Equal(so, lista[0].Materia.ID)
+	s.Equal(comisiones[0].ID, lista[0].ComisionID)
+	s.Equal("2099-05-20", lista[0].Fecha)
+	s.Equal(3, lista[0].Confirmaciones)
+	s.Require().NotNil(lista[0].Hora)
+	s.Equal("18:00", *lista[0].Hora)
+
+	// Los de otra comision no lo ven y los que ya lo tienen tampoco
+	s.Empty(s.confirmados(otraComision))
+	s.Empty(s.confirmados(alumnos[0]))
+
+	// Si dice que no es asi deja de verlo; con tantos "no" como confirmaciones
+	// desaparece para todos
+	desmentir := map[string]any{"materia_id": so, "comision_id": comisiones[0].ID, "tipo": "parcial", "fecha": "2099-05-20"}
+	s.Equal(http.StatusNoContent, yo.JSON("POST", "/eventos/confirmados/desmentir", desmentir).Status)
+	s.Empty(s.confirmados(yo))
+
+	cuarto := nuevo("cuatro.confirmado@chedul.com")
+	cursar(cuarto, comisiones[0].ID)
+	s.Len(s.confirmados(cuarto), 1)
+	for _, email := range []string{"cinco.confirmado@chedul.com", "seis.confirmado@chedul.com"} {
+		c := nuevo(email)
+		cursar(c, comisiones[0].ID)
+		s.Equal(http.StatusNoContent, c.JSON("POST", "/eventos/confirmados/desmentir", desmentir).Status)
+	}
+	s.Empty(s.confirmados(cuarto))
+
+	s.Equal(http.StatusUnprocessableEntity, yo.JSON("POST", "/eventos/confirmados/desmentir", map[string]any{"materia_id": so, "tipo": "recordatorio", "fecha": "2099-05-20"}).Status)
+}

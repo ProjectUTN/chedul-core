@@ -332,6 +332,89 @@ func (r *calendarioRepository) AlumnoDelCalendario(ctx context.Context, token st
 	return ids[0], nil
 }
 
+// queryEventosConfirmados arma los eventos confirmados por compañeros.
+// Un alumno cuenta para una comision si tiene en su horario una clase de esa
+// comision; para los finales (comision 0), si tiene la materia regular o la
+// esta cursando. Solo votan y ven los eventos los que cuentan.
+const queryEventosConfirmados = `
+with yo as (select ?::int as id),
+comision_de as (
+    select distinct alumno_id, materia_id, comision_id from clase where comision_id is not null
+    union
+    select ca.alumno_id, ca.materia_id, 0
+    from condicion_alumno ca join condicion co on co.id = ca.condicion_id
+    where co.condicion in ('Regularizada', 'Cursando')
+),
+votos as (
+    select distinct on (e.alumno_id, e.materia_id, e.tipo, e.fecha, cd.comision_id)
+        e.alumno_id, e.materia_id, e.tipo, e.fecha, cd.comision_id, e.hora
+    from evento e
+    join comision_de cd on cd.alumno_id = e.alumno_id and cd.materia_id = e.materia_id
+        and (e.tipo = 'final') = (cd.comision_id = 0)
+    where e.tipo in ('parcial', 'entrega', 'final') and e.fecha >= ?::date
+    order by e.alumno_id, e.materia_id, e.tipo, e.fecha, cd.comision_id, e.hora nulls last
+),
+grupos as (
+    select materia_id, tipo, fecha, comision_id, count(*) as confirmaciones,
+        mode() within group (order by hora) as hora,
+        bool_or(alumno_id = (select id from yo)) as mio
+    from votos
+    group by materia_id, tipo, fecha, comision_id
+),
+desmentidos as (
+    select d.materia_id, d.tipo, d.fecha, d.comision_id, count(*) as n,
+        bool_or(d.alumno_id = (select id from yo)) as mio
+    from evento_desmentido d
+    join comision_de cd on cd.alumno_id = d.alumno_id and cd.materia_id = d.materia_id and cd.comision_id = d.comision_id
+    group by d.materia_id, d.tipo, d.fecha, d.comision_id
+)
+select g.materia_id, m.nombre as materia_nombre, g.comision_id, g.tipo, g.confirmaciones,
+    to_char(g.fecha, 'YYYY-MM-DD') as fecha, to_char(g.hora, 'HH24:MI') as hora
+from grupos g
+join materia m on m.id = g.materia_id
+join comision_de mia on mia.alumno_id = (select id from yo) and mia.materia_id = g.materia_id and mia.comision_id = g.comision_id
+left join desmentidos d on d.materia_id = g.materia_id and d.tipo = g.tipo and d.fecha = g.fecha and d.comision_id = g.comision_id
+where g.confirmaciones >= ? and not g.mio and not coalesce(d.mio, false)
+    and coalesce(d.n, 0) < g.confirmaciones
+order by g.fecha, g.hora nulls first, m.nombre`
+
+func (r *calendarioRepository) ListEventosConfirmados(ctx context.Context, alumnoID int64, desde string, minimo int) ([]domain.EventoConfirmado, error) {
+	var rows []struct {
+		MateriaID      int64          `bun:"materia_id"`
+		MateriaNombre  string         `bun:"materia_nombre"`
+		ComisionID     int64          `bun:"comision_id"`
+		Tipo           string         `bun:"tipo"`
+		Confirmaciones int            `bun:"confirmaciones"`
+		Fecha          string         `bun:"fecha"`
+		Hora           sql.NullString `bun:"hora"`
+	}
+	if err := r.db.NewRaw(queryEventosConfirmados, alumnoID, desde, minimo).Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	eventos := make([]domain.EventoConfirmado, len(rows))
+	for i, row := range rows {
+		eventos[i] = domain.EventoConfirmado{
+			Materia:        domain.MateriaResumen{ID: row.MateriaID, Nombre: row.MateriaNombre},
+			ComisionID:     row.ComisionID,
+			Tipo:           row.Tipo,
+			Fecha:          row.Fecha,
+			Confirmaciones: row.Confirmaciones,
+		}
+		if row.Hora.Valid {
+			eventos[i].Hora = &row.Hora.String
+		}
+	}
+	return eventos, nil
+}
+
+func (r *calendarioRepository) DesmentirEvento(ctx context.Context, alumnoID int64, d domain.DatosDesmentido) error {
+	_, err := r.db.ExecContext(ctx, `
+		insert into evento_desmentido (alumno_id, materia_id, comision_id, tipo, fecha)
+		values (?, ?, ?, ?, ?)
+		on conflict do nothing`, alumnoID, d.MateriaID, d.ComisionID, d.Tipo, d.Fecha)
+	return err
+}
+
 // filasAfectadas devuelve noEncontrado si la consulta no toco ninguna fila:
 // el registro no existe o es de otro alumno.
 func filasAfectadas(res sql.Result, err error, noEncontrado error) error {
