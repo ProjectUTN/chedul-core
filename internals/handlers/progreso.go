@@ -61,18 +61,23 @@ type ProgresoResponse struct {
 // si la carga horaria semanal de las materias que le faltan cursar no supera
 // la del ultimo nivel, las cursa sin correlativas (para rendir el final si se
 // piden). Se cuentan horas semanales (carga_horaria), no las horas totales.
-// Las electivas y las que no tienen cursado (la Practica Supervisada) no se
-// cuentan, porque no se sabe cuales va a elegir el alumno.
+// De las electivas se suman las horas que le faltan para llegar a las que
+// pide el plan. La Practica Supervisada (sin cursado) no se cuenta.
 type Ordenanza531 struct {
-	Puede          bool            `json:"puede"`
-	HorasFaltantes float64         `json:"horas_faltantes"`
-	HorasLimite    float64         `json:"horas_limite"`
-	Faltantes      []MateriaSimple `json:"faltantes"`
+	Puede          bool    `json:"puede"`
+	HorasFaltantes float64 `json:"horas_faltantes"`
+	// Parte de horas_faltantes que son electivas que le faltan
+	HorasElectivasFaltantes float64         `json:"horas_electivas_faltantes"`
+	HorasLimite             float64         `json:"horas_limite"`
+	Faltantes               []MateriaSimple `json:"faltantes"`
 }
 
 const (
 	tipoObligatoria = "Obligatoria"
 	tipoElectiva    = "Electiva"
+
+	// Horas semanales de electivas que pide el plan de ISI
+	HorasElectivasPlan = 20
 )
 
 // cuentaPara531 indica si la materia entra en la cuenta: obligatoria y con cursado.
@@ -117,6 +122,25 @@ func CalcularOrdenanza531(materias []domain.Materia, estados map[int64]domain.Co
 			EstadoActual: condicion,
 			Tipo:         m.Tipo,
 		})
+	}
+
+	// Electivas: lo que falta para llegar a las horas del plan. Las que ya
+	// regularizo o esta cursando tampoco hace falta pedirlas.
+	hayElectivas := false
+	var electivasHechas float64
+	for _, m := range materias {
+		if m.Tipo != tipoElectiva {
+			continue
+		}
+		hayElectivas = true
+		switch estados[m.ID].Condicion {
+		case condicionAprobada, condicionRegularizada, condicionCursando:
+			electivasHechas += float64(m.CargaHoraria)
+		}
+	}
+	if hayElectivas && electivasHechas < HorasElectivasPlan {
+		resp.HorasElectivasFaltantes = HorasElectivasPlan - electivasHechas
+		resp.HorasFaltantes += resp.HorasElectivasFaltantes
 	}
 
 	resp.Puede = resp.HorasLimite > 0 && resp.HorasFaltantes > 0 && resp.HorasFaltantes <= resp.HorasLimite
