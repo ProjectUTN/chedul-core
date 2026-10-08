@@ -336,7 +336,7 @@ func (r *calendarioRepository) AlumnoDelCalendario(ctx context.Context, token st
 // Un alumno cuenta para una comision si tiene en su horario una clase de esa
 // comision; para los finales (comision 0), si tiene la materia regular o la
 // esta cursando. Solo votan y ven los eventos los que cuentan.
-const queryEventosConfirmados = `
+var queryEventosConfirmados = `
 with yo as (select ?::int as id),
 comision_de as (
     select distinct alumno_id, materia_id, comision_id from clase where comision_id is not null
@@ -355,14 +355,16 @@ votos as (
     order by e.alumno_id, e.materia_id, e.tipo, e.fecha, cd.comision_id, e.hora nulls last
 ),
 grupos as (
-    select materia_id, tipo, fecha, comision_id, count(*) as confirmaciones,
+    select materia_id, tipo, fecha, comision_id,
+        count(*) filter (where ` + domain.CuentaConfiableSQL("votos.alumno_id") + `) as confirmaciones,
         mode() within group (order by hora) as hora,
         bool_or(alumno_id = (select id from yo)) as mio
     from votos
     group by materia_id, tipo, fecha, comision_id
 ),
 desmentidos as (
-    select d.materia_id, d.tipo, d.fecha, d.comision_id, count(*) as n,
+    select d.materia_id, d.tipo, d.fecha, d.comision_id,
+        count(*) filter (where ` + domain.CuentaConfiableSQL("d.alumno_id") + `) as n,
         bool_or(d.alumno_id = (select id from yo)) as mio
     from evento_desmentido d
     join comision_de cd on cd.alumno_id = d.alumno_id and cd.materia_id = d.materia_id and cd.comision_id = d.comision_id

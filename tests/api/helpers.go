@@ -36,6 +36,21 @@ type TestApp struct {
 	server  *server.Server
 }
 
+// Envejecer hace que las cuentas con correo LIKE patron parezcan creadas
+// hace 10 dias (las nuevas no cuentan para reportes ni confirmaciones).
+func (t *TestApp) Envejecer(patron string) {
+	if _, err := t.db.Exec("update alumno set creado = now() - interval '10 days' where email like ?", patron); err != nil {
+		panic(err)
+	}
+}
+
+// HacerAdmin marca la cuenta con ese correo como administradora.
+func (t *TestApp) HacerAdmin(email string) {
+	if _, err := t.db.Exec("update alumno set es_admin = true where email = ?", email); err != nil {
+		panic(err)
+	}
+}
+
 func (t *TestApp) Cleanup() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -87,11 +87,31 @@ func (h *AlumnoHandler) LogInGoogle(c echo.Context) error {
 		if err != nil {
 			return err
 		}
+		if err := h.alumnoRepo.VincularGoogle(ctx, alumno.ID, nil); err != nil {
+			return err
+		}
 		h.logger.Info("LogInGoogle: cuenta nueva", zap.Int64("alumno_id", alumno.ID))
+	} else if !alumno.GoogleVinculado {
+		// La cuenta se creo con clave y el registro no verifica el correo:
+		// pudo haberla creado otra persona con este mail. Google si lo
+		// verifico, asi que el dueño es quien entra ahora: se borra la clave
+		// y se cierran las otras sesiones.
+		clave, err := claveAlAzar()
+		if err != nil {
+			return err
+		}
+		if err := h.alumnoRepo.VincularGoogle(ctx, alumno.ID, &clave); err != nil {
+			return err
+		}
+		alumno, err = h.alumnoRepo.GetByID(ctx, alumno.ID)
+		if err != nil {
+			return err
+		}
+		h.logger.Info("LogInGoogle: cuenta con clave vinculada a Google", zap.Int64("alumno_id", alumno.ID))
 	}
 
 	h.logger.Info("LogInGoogle: autenticación exitosa", zap.Int64("alumno_id", alumno.ID))
-	return h.iniciarSesion(c, alumno)
+	return h.iniciarSesion(c, alumno, "google")
 }
 
 func (h *AlumnoHandler) crearAlumnoGoogle(ctx context.Context, email domain.Email, nombreGoogle string) (*domain.Alumno, error) {

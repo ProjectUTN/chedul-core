@@ -64,7 +64,7 @@ func (r *comunidadRepository) selectComunidades(viewerID int64) *bun.SelectQuery
 		ColumnExpr("coalesce(c.alumno_id = ?, false) AS es_mia", viewerID).
 		ColumnExpr("exists (select 1 from comunidad_reporte r where r.comunidad_id = c.id and r.alumno_id = ?) AS reportada", viewerID).
 		Join("LEFT JOIN materia AS m ON m.id = c.materia_id").
-		Where("(select count(*) from comunidad_reporte r where r.comunidad_id = c.id) < ?", domain.ComunidadReportesMax)
+		Where("(select count(*) from comunidad_reporte r where r.comunidad_id = c.id and "+domain.CuentaConfiableSQL("r.alumno_id")+") < ?", domain.ComunidadReportesMax)
 }
 
 // List pone primero las generales de la carrera y despues las de cada materia

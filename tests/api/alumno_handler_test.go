@@ -226,6 +226,75 @@ func (s *AlumnoHandlerSuite) TestCambiarPassword() {
 	s.Equal(http.StatusOK, otro.JSON("POST", "/login", map[string]any{"email": "pato.clave@chedul.com", "password": "Nueva-Clave-9"}).Status)
 }
 
+func (s *AlumnoHandlerSuite) TestCambiarPasswordCierraLasOtrasSesiones() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Juli", "juli.sesiones@chedul.com")
+	otra := NewClient(s.T(), s.app)
+	s.Require().Equal(http.StatusOK, otra.JSON("POST", "/login", map[string]any{"email": "juli.sesiones@chedul.com", "password": "Chedul-123"}).Status)
+
+	resp := c.JSON("PUT", "/alumnos/me/password", map[string]any{"actual": "Chedul-123", "nueva": "otra clave"})
+	s.Require().Equal(http.StatusNoContent, resp.Status, string(resp.Body))
+
+	s.Equal(http.StatusUnauthorized, otra.JSON("POST", "/refresh-token", nil).Status, "la otra sesion se cierra")
+	s.Equal(http.StatusOK, c.JSON("POST", "/refresh-token", nil).Status, "quien cambio la clave sigue adentro")
+}
+
+func (s *AlumnoHandlerSuite) TestPanelAdmin() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Admin", "admin.panel@chedul.com")
+
+	// Para los demas el panel no existe
+	s.Equal(http.StatusNotFound, c.JSON("GET", "/admin/resumen", nil).Status)
+	s.NotContains(string(c.JSON("GET", "/alumnos/me", nil).Body), "es_admin")
+
+	s.app.HacerAdmin("admin.panel@chedul.com")
+	s.Contains(string(c.JSON("GET", "/alumnos/me", nil).Body), `"es_admin":true`)
+
+	resp := c.JSON("GET", "/admin/resumen", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var resumen struct {
+		Alumnos         int `json:"alumnos"`
+		Nuevos7         int `json:"nuevos_7_dias"`
+		AccesosHoy      int `json:"accesos_hoy"`
+		RegistrosPorDia []struct {
+			Dia      string `json:"dia"`
+			Cantidad int    `json:"cantidad"`
+		} `json:"registros_por_dia"`
+	}
+	resp.JSON(s.T(), &resumen)
+	s.GreaterOrEqual(resumen.Alumnos, 1)
+	s.GreaterOrEqual(resumen.Nuevos7, 1)
+	s.GreaterOrEqual(resumen.AccesosHoy, 1)
+	s.Len(resumen.RegistrosPorDia, 30)
+	s.GreaterOrEqual(resumen.RegistrosPorDia[29].Cantidad, 1)
+
+	resp = c.JSON("GET", "/admin/alumnos?buscar=admin.panel", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var lista struct {
+		Alumnos []struct {
+			Email        string  `json:"email"`
+			UltimoAcceso *string `json:"ultimo_acceso"`
+			EsAdmin      bool    `json:"es_admin"`
+		} `json:"alumnos"`
+		Total int `json:"total"`
+	}
+	resp.JSON(s.T(), &lista)
+	s.Require().Equal(1, lista.Total)
+	s.Equal("admin.panel@chedul.com", lista.Alumnos[0].Email)
+	s.NotNil(lista.Alumnos[0].UltimoAcceso)
+	s.True(lista.Alumnos[0].EsAdmin)
+
+	resp = c.JSON("GET", "/admin/accesos", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	s.Contains(string(resp.Body), "admin.panel@chedul.com")
+
+	// El contador es publico
+	publico := NewClient(s.T(), s.app)
+	resp = publico.JSON("GET", "/estadisticas", nil)
+	s.Require().Equal(http.StatusOK, resp.Status)
+	s.Contains(string(resp.Body), `"alumnos":`)
+}
+
 // pedidoDesde manda un POST JSON como si viniera de otra IP (por el proxy)
 func (s *AlumnoHandlerSuite) pedidoDesde(ip, path, contentType, body string) int {
 	req, err := http.NewRequest("POST", s.app.Address+"/api/v1"+path, strings.NewReader(body))

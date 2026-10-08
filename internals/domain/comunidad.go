@@ -18,8 +18,9 @@ const (
 	ComunidadNombreMax      = 80
 	ComunidadDescripcionMax = 300
 	ComunidadLinkMax        = 500
-	// Con esta cantidad de reportes de distintos alumnos la comunidad se oculta
-	ComunidadReportesMax = 3
+	// Con esta cantidad de reportes de distintos alumnos con cuentas de al
+	// menos DiasParaVotar dias la comunidad se oculta
+	ComunidadReportesMax = 5
 )
 
 // Comunidad es un grupo de la carrera (WhatsApp, Discord...) que cargo un alumno.
