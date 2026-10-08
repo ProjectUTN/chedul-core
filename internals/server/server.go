@@ -179,6 +179,7 @@ func (s *Server) SetupRoutes() {
 	aporteRepo := repositories.NewAporteRepository(s.ConnPool)
 	calendarioRepo := repositories.NewCalendarioRepository(s.ConnPool)
 	estudioRepo := repositories.NewEstudioRepository(s.ConnPool)
+	comunidadRepo := repositories.NewComunidadRepository(s.ConnPool)
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret, s.Config.Google.ClientID)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.Logger)
@@ -189,6 +190,7 @@ func (s *Server) SetupRoutes() {
 	aporteHandler := handlers.NewAporteHandler(aporteRepo, materiaRepo, s.Storage, s.Config.Uploads.MaxSizeMB, !s.Config.Uploads.Disabled, s.Logger)
 	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
 	estudioHandler := handlers.NewEstudioHandler(estudioRepo, materiaRepo, s.Logger)
+	comunidadHandler := handlers.NewComunidadHandler(comunidadRepo, materiaRepo)
 
 	api := s.Echo.Group("/api/v1")
 
@@ -256,6 +258,12 @@ func (s *Server) SetupRoutes() {
 	estudio.POST("/tareas", estudioHandler.CreateTarea)
 	estudio.PUT("/tareas/:id", estudioHandler.UpdateTarea)
 	estudio.DELETE("/tareas/:id", estudioHandler.DeleteTarea)
+
+	comunidades := protectedAPI.Group("/comunidades")
+	comunidades.GET("", comunidadHandler.List)
+	comunidades.POST("", comunidadHandler.Create)
+	comunidades.DELETE("/:id", comunidadHandler.Delete)
+	comunidades.POST("/:id/reportar", comunidadHandler.Reportar)
 
 	clases := protectedAPI.Group("/clases")
 	clases.GET("", calendarioHandler.ListClases)
