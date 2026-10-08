@@ -27,15 +27,20 @@ func TestCalcularOrdenanza531(t *testing.T) {
 
 	// Con Sistemas Operativos aprobada le falta justo el ultimo nivel; la
 	// electiva y la practica supervisada no cuentan
+	r = CalcularOrdenanza531(materias, map[int64]domain.CondicionPorAlumno{1: aprobada(1)})
+	assert.True(t, r.Puede)
+	assert.Equal(t, 12.0, r.HorasFaltantes)
+
+	// Solo cuenta lo que falta cursar: la regularizada y la que esta
+	// cursando no suman
 	r = CalcularOrdenanza531(materias, map[int64]domain.CondicionPorAlumno{
-		1: aprobada(1),
+		1: {MateriaID: 1, Condicion: "Cursando"},
 		3: {MateriaID: 3, Condicion: "Regularizada"},
 	})
 	assert.True(t, r.Puede)
-	assert.Equal(t, 12.0, r.HorasFaltantes)
-	assert.Len(t, r.Faltantes, 2)
+	assert.Equal(t, 6.0, r.HorasFaltantes)
+	assert.Len(t, r.Faltantes, 1)
 	assert.Equal(t, "Pendiente", r.Faltantes[0].EstadoActual)
-	assert.Equal(t, "Regularizada", r.Faltantes[1].EstadoActual)
 
 	// Recibido: no tiene nada que pedir
 	r = CalcularOrdenanza531(materias, map[int64]domain.CondicionPorAlumno{1: aprobada(1), 2: aprobada(2), 3: aprobada(3)})
