@@ -59,7 +59,7 @@ func (s *CalendarioHandlerSuite) eventos(c *Client, desde, hasta string) []event
 
 func (s *CalendarioHandlerSuite) TestEventos() {
 	c := NewClient(s.T(), s.app)
-	c.Registrar("Ana", "ana.calendario@chedul.com")
+	c.Registrar("Facu", "facu.academico@chedul.com")
 	am1 := c.MateriaID("isi-am1")
 
 	resp := c.JSON("POST", "/eventos", map[string]any{
@@ -212,7 +212,7 @@ func (s *CalendarioHandlerSuite) TestHorarioSemanal() {
 
 func (s *CalendarioHandlerSuite) TestCalendarioAcademico() {
 	c := NewClient(s.T(), s.app)
-	c.Registrar("Ana", "ana.calendario@chedul.com")
+	c.Registrar("Facu", "facu.academico@chedul.com")
 
 	resp := c.JSON("GET", "/calendario-academico?desde=2026-07-15&hasta=2026-08-12", nil)
 	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
