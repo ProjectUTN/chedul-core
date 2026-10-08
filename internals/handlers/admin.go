@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"chedul-core/internals/domain"
+	"chedul-core/pkg/config"
 	"net/http"
 	"strconv"
 
@@ -12,10 +13,11 @@ import (
 type AdminHandler struct {
 	repo       domain.AdminRepository
 	alumnoRepo domain.AlumnoRepository
+	admins     config.Admins
 }
 
-func NewAdminHandler(repo domain.AdminRepository, alumnoRepo domain.AlumnoRepository) *AdminHandler {
-	return &AdminHandler{repo: repo, alumnoRepo: alumnoRepo}
+func NewAdminHandler(repo domain.AdminRepository, alumnoRepo domain.AlumnoRepository, admins config.Admins) *AdminHandler {
+	return &AdminHandler{repo: repo, alumnoRepo: alumnoRepo, admins: admins}
 }
 
 // SoloAdmin deja pasar solo a los alumnos marcados como admin. A los demas les
@@ -27,7 +29,7 @@ func (h *AdminHandler) SoloAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 			return err
 		}
 		alumno, err := h.alumnoRepo.GetByID(c.Request().Context(), id)
-		if err != nil || !alumno.EsAdmin {
+		if err != nil || !h.admins.Incluye(alumno.Email.String()) {
 			return echo.ErrNotFound
 		}
 		return next(c)
@@ -47,6 +49,9 @@ func (h *AdminHandler) Alumnos(c echo.Context) error {
 	alumnos, total, err := h.repo.Alumnos(c.Request().Context(), c.QueryParam("buscar"), pagina)
 	if err != nil {
 		return err
+	}
+	for i := range alumnos {
+		alumnos[i].EsAdmin = h.admins.Incluye(alumnos[i].Email)
 	}
 	return c.JSON(http.StatusOK, map[string]any{
 		"alumnos":    alumnos,

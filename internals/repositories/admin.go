@@ -69,7 +69,7 @@ func (r *adminRepository) Alumnos(ctx context.Context, buscar string, pagina int
 	var filas []domain.AlumnoAdmin
 	q := r.db.NewSelect().
 		TableExpr("alumno AS a").
-		ColumnExpr("a.id, a.nombre, a.email, a.google_vinculado AS google, a.es_admin").
+		ColumnExpr("a.id, a.nombre, a.email, a.google_vinculado AS google").
 		ColumnExpr(`to_char(a.creado AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS creado`).
 		ColumnExpr(`to_char(a.ultimo_acceso AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS ultimo_acceso`).
 		ColumnExpr("(select count(*) from condicion_alumno ca where ca.alumno_id = a.id) AS materias").

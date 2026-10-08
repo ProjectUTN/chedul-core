@@ -28,6 +28,18 @@ type AlumnoHandler struct {
 	// Intentos de clave por correo (login) y por alumno (cambio de clave), para
 	// que no se pueda adivinar una clave probando muchas
 	intentos *middleware.RateLimiterMemoryStore
+	admins   config.Admins
+}
+
+// SetAdmins indica que correos son de administradores.
+func (h *AlumnoHandler) SetAdmins(admins config.Admins) {
+	h.admins = admins
+}
+
+// conRol marca si el alumno es admin antes de mandarselo al front.
+func (h *AlumnoHandler) conRol(alumno *domain.Alumno) *domain.Alumno {
+	alumno.EsAdmin = h.admins.Incluye(alumno.Email.String())
+	return alumno
 }
 
 func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, jwtSecret config.Secret, googleClientID string) *AlumnoHandler {
@@ -70,7 +82,7 @@ func (h *AlumnoHandler) GetMe(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, alumno)
+	return c.JSON(http.StatusOK, h.conRol(alumno))
 }
 
 func (h *AlumnoHandler) SignUp(c echo.Context) error {
@@ -179,7 +191,7 @@ func (h *AlumnoHandler) iniciarSesion(c echo.Context, alumno *domain.Alumno, met
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"accessToken": accessToken,
-		"user":        alumno,
+		"user":        h.conRol(alumno),
 	})
 }
 
@@ -233,7 +245,7 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"accessToken": newAccessToken,
-		"user":        alumno,
+		"user":        h.conRol(alumno),
 	})
 }
 
@@ -272,7 +284,7 @@ func (h *AlumnoHandler) UpdateMe(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, alumno)
+	return c.JSON(http.StatusOK, h.conRol(alumno))
 }
 
 // CambiarPassword cambia la clave del alumno. Pide la actual para que no se

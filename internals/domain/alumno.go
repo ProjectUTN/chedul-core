@@ -10,7 +10,8 @@ type Alumno struct {
 	Email    Email    `json:"email"`
 	Carrera  int64    `json:"carrera"`
 	Password Password `json:"-"`
-	// Solo los administradores reciben este campo (y ven el panel)
+	// Solo los administradores reciben este campo (y ven el panel). Se
+	// completa con la lista de config.Admins, no se guarda en la base.
 	EsAdmin bool `json:"es_admin,omitempty"`
 	// Ya entro alguna vez con Google
 	GoogleVinculado bool `json:"-"`
