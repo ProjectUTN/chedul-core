@@ -237,6 +237,45 @@ func (h *AlumnoHandler) UpdateMe(c echo.Context) error {
 	return c.JSON(http.StatusOK, alumno)
 }
 
+// CambiarPassword cambia la clave del alumno. Pide la actual para que no se
+// pueda cambiar con una sesion abierta ajena.
+func (h *AlumnoHandler) CambiarPassword(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	id, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+
+	var req struct {
+		Actual string `json:"actual"`
+		Nueva  string `json:"nueva"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return InvalidJSON()
+	}
+
+	alumno, err := h.alumnoRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if ok, err := domain.CheckPassword(alumno.Password.String(), req.Actual); err != nil || !ok {
+		return InvalidRequestData(map[string]string{"actual": "La contraseña actual no es correcta"})
+	}
+	nueva, err := domain.ParsePassword(req.Nueva)
+	if err != nil {
+		return InvalidRequestData(map[string]string{"nueva": err.Error()})
+	}
+
+	alumno.Password = nueva
+	if err := h.alumnoRepo.Update(ctx, alumno); err != nil {
+		return err
+	}
+	h.logger.Info("Clave cambiada", zap.Int64("alumno_id", id))
+	return c.NoContent(http.StatusNoContent)
+}
+
 // DeleteMe borra la cuenta del alumno autenticado.
 func (h *AlumnoHandler) DeleteMe(c echo.Context) error {
 	ctx := c.Request().Context()

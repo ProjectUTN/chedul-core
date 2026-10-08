@@ -222,6 +222,7 @@ func (s *Server) SetupRoutes() {
 	me.GET("", alumnoHandler.GetMe)
 	me.PUT("", alumnoHandler.UpdateMe)
 	me.DELETE("", alumnoHandler.DeleteMe)
+	me.PUT("/password", alumnoHandler.CambiarPassword)
 	me.GET("/progreso", progresoHandler.GetMiProgreso)
 
 	condicionAlumno := protectedAPI.Group("/condicion_alumno")
