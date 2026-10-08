@@ -206,3 +206,20 @@ func (s *AlumnoHandlerSuite) TestLoginGoogleRechazaTokenTrucho() {
 	resp = c.JSON("POST", "/auth/google", map[string]string{})
 	s.Equal(http.StatusBadRequest, resp.Status, string(resp.Body))
 }
+
+func (s *AlumnoHandlerSuite) TestCambiarPassword() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Pato", "pato.clave@chedul.com")
+
+	resp := c.JSON("PUT", "/alumnos/me/password", map[string]any{"actual": "Otra-123", "nueva": "Nueva-Clave-9"})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+	resp = c.JSON("PUT", "/alumnos/me/password", map[string]any{"actual": "Chedul-123", "nueva": "corta"})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+
+	resp = c.JSON("PUT", "/alumnos/me/password", map[string]any{"actual": "Chedul-123", "nueva": "Nueva-Clave-9"})
+	s.Require().Equal(http.StatusNoContent, resp.Status, string(resp.Body))
+
+	otro := NewClient(s.T(), s.app)
+	s.Equal(http.StatusUnauthorized, otro.JSON("POST", "/login", map[string]any{"email": "pato.clave@chedul.com", "password": "Chedul-123"}).Status)
+	s.Equal(http.StatusOK, otro.JSON("POST", "/login", map[string]any{"email": "pato.clave@chedul.com", "password": "Nueva-Clave-9"}).Status)
+}
