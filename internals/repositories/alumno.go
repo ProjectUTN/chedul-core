@@ -16,7 +16,6 @@ type AlumnoModel struct {
 	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
 	Password      string `json:"-" bun:"password"`
 	// Update no los toca: se cambian con sus propios metodos
-	EsAdmin         bool `bun:"es_admin,notnull"`
 	GoogleVinculado bool `bun:"google_vinculado,notnull"`
 	VersionSesion   int  `bun:"version_sesion,notnull"`
 }
@@ -45,7 +44,6 @@ func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
 		// TODO: Todavia no se si es peligroso asumir que la clave en la base
 		// de datos ya esta encriptada
 		Password:        domain.ParsePasswordFromEncrypted(model.Password),
-		EsAdmin:         model.EsAdmin,
 		GoogleVinculado: model.GoogleVinculado,
 		VersionSesion:   model.VersionSesion,
 	}, nil

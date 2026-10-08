@@ -36,6 +36,21 @@ type AppConfig struct {
 	TracerProvider HoneycombConfig `json:"tracer_provider" mapstructure:"tracer_provider"`
 	Uploads        UploadsConfig   `json:"uploads"`
 	Google         GoogleConfig    `json:"google"`
+	// Correos de los administradores (variable ADMIN_EMAILS, separados por
+	// coma). Van por entorno para que no queden en el repo.
+	Admins Admins `json:"admins"`
+}
+
+type Admins []string
+
+// Incluye dice si el correo es de un administrador (sin importar mayusculas).
+func (a Admins) Incluye(email string) bool {
+	for _, admin := range a {
+		if strings.EqualFold(strings.TrimSpace(admin), strings.TrimSpace(email)) {
+			return true
+		}
+	}
+	return false
 }
 
 // GoogleConfig habilita "Continuar con Google". El client ID es publico (va en
@@ -189,6 +204,15 @@ func (c *AppConfig) overrideWithEnv() *AppConfig {
 
 	if id := os.Getenv("GOOGLE_CLIENT_ID"); id != "" {
 		c.Google.ClientID = id
+	}
+
+	if admins := os.Getenv("ADMIN_EMAILS"); admins != "" {
+		c.Admins = nil
+		for _, email := range strings.Split(admins, ",") {
+			if email = strings.TrimSpace(email); email != "" {
+				c.Admins = append(c.Admins, email)
+			}
+		}
 	}
 
 	return c

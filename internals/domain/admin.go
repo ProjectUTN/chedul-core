@@ -32,7 +32,7 @@ type AlumnoAdmin struct {
 	Creado       *string `json:"creado"`
 	UltimoAcceso *string `json:"ultimo_acceso"`
 	Google       bool    `json:"google"`
-	EsAdmin      bool    `json:"es_admin"`
+	EsAdmin      bool    `json:"es_admin" bun:"-"`
 	Materias     int     `json:"materias"`
 	Aportes      int     `json:"aportes"`
 }

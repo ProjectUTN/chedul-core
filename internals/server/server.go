@@ -196,7 +196,8 @@ func (s *Server) SetupRoutes() {
 	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
 	estudioHandler := handlers.NewEstudioHandler(estudioRepo, materiaRepo, s.Logger)
 	comunidadHandler := handlers.NewComunidadHandler(comunidadRepo, materiaRepo)
-	adminHandler := handlers.NewAdminHandler(repositories.NewAdminRepository(s.ConnPool), alumnoRepo)
+	alumnoHandler.SetAdmins(s.Config.Admins)
+	adminHandler := handlers.NewAdminHandler(repositories.NewAdminRepository(s.ConnPool), alumnoRepo, s.Config.Admins)
 
 	api := s.Echo.Group("/api/v1")
 

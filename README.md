@@ -46,6 +46,7 @@ TEST_DATABASE_URL="postgres://chedul:chedul@127.0.0.1:5432/postgres?sslmode=disa
 | `PORT` | No | Puerto. Cloud Run, Render y Railway lo definen solos. |
 | `UPLOADS_DIR` | No | Carpeta de los archivos subidos. Default `uploads`; en Docker `/uploads`. |
 | `UPLOADS_DISABLED` | No | `true` apaga la subida de archivos y los aportes son solo links. Para hostings sin disco, como Cloud Run. |
+| `ADMIN_EMAILS` | No | Correos de los administradores separados por coma. Son los únicos que ven `/admin`. Van por entorno para no quedar en el repo. |
 | `HONEYCOMB_API_KEY` | No | Si está, se mandan trazas a Honeycomb. |
 
 ## Deploy

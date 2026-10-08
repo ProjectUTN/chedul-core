@@ -44,13 +44,6 @@ func (t *TestApp) Envejecer(patron string) {
 	}
 }
 
-// HacerAdmin marca la cuenta con ese correo como administradora.
-func (t *TestApp) HacerAdmin(email string) {
-	if _, err := t.db.Exec("update alumno set es_admin = true where email = ?", email); err != nil {
-		panic(err)
-	}
-}
-
 func (t *TestApp) Cleanup() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -103,6 +96,7 @@ func createTestConfig() *config.AppConfig {
 		Google: config.GoogleConfig{
 			ClientID: "test-client.apps.googleusercontent.com",
 		},
+		Admins: config.Admins{"Admin.Panel@chedul.com"},
 	}
 }
 

@@ -240,14 +240,14 @@ func (s *AlumnoHandlerSuite) TestCambiarPasswordCierraLasOtrasSesiones() {
 }
 
 func (s *AlumnoHandlerSuite) TestPanelAdmin() {
+	// Para los que no estan en ADMIN_EMAILS el panel no existe
+	comun := NewClient(s.T(), s.app)
+	comun.Registrar("Comun", "comun.panel@chedul.com")
+	s.Equal(http.StatusNotFound, comun.JSON("GET", "/admin/resumen", nil).Status)
+	s.NotContains(string(comun.JSON("GET", "/alumnos/me", nil).Body), "es_admin")
+
 	c := NewClient(s.T(), s.app)
 	c.Registrar("Admin", "admin.panel@chedul.com")
-
-	// Para los demas el panel no existe
-	s.Equal(http.StatusNotFound, c.JSON("GET", "/admin/resumen", nil).Status)
-	s.NotContains(string(c.JSON("GET", "/alumnos/me", nil).Body), "es_admin")
-
-	s.app.HacerAdmin("admin.panel@chedul.com")
 	s.Contains(string(c.JSON("GET", "/alumnos/me", nil).Body), `"es_admin":true`)
 
 	resp := c.JSON("GET", "/admin/resumen", nil)
