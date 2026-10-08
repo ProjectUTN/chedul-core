@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,10 @@ const (
 
 // TiposEvento son los tipos de evento que acepta el calendario.
 var TiposEvento = []string{"parcial", "final", "entrega", "recordatorio", "otro"}
+
+// TiposClase son los tipos de bloque del horario semanal: clases de la
+// facultad u otras actividades que se repiten (trabajo, deporte...).
+var TiposClase = []string{"clase", "trabajo", "otro"}
 
 type MateriaResumen struct {
 	ID     int64  `json:"id"`
@@ -141,6 +146,9 @@ type Clase struct {
 	ComisionID *int64 `json:"comision_id"`
 	// Cuatrimestre de esa comision (1C, 2C); nil si se cargo a mano
 	Cuatrimestre *string `json:"cuatrimestre"`
+	Tipo         string  `json:"tipo"`
+	// Ultimo dia en que se repite (AAAA-MM-DD); nil si no termina
+	Hasta *string `json:"hasta"`
 }
 
 type DatosClase struct {
@@ -151,6 +159,9 @@ type DatosClase struct {
 	Aula       string `json:"aula"`
 	MateriaID  *int64 `json:"materia_id"`
 	ComisionID *int64 `json:"comision_id"`
+	// Vacio es "clase"
+	Tipo  string  `json:"tipo"`
+	Hasta *string `json:"hasta"`
 }
 
 func (d *DatosClase) Normalizar() {
@@ -160,6 +171,17 @@ func (d *DatosClase) Normalizar() {
 	d.Aula = strings.TrimSpace(d.Aula)
 	d.MateriaID = normalizarMateria(d.MateriaID)
 	d.ComisionID = normalizarMateria(d.ComisionID)
+	d.Tipo = strings.TrimSpace(d.Tipo)
+	if d.Tipo == "" {
+		d.Tipo = "clase"
+	}
+	if d.Hasta != nil {
+		hasta := strings.TrimSpace(*d.Hasta)
+		d.Hasta = &hasta
+		if hasta == "" {
+			d.Hasta = nil
+		}
+	}
 }
 
 func (d *DatosClase) Validate() map[string]string {
@@ -186,6 +208,16 @@ func (d *DatosClase) Validate() map[string]string {
 
 	if uniseg.GraphemeClusterCount(d.Aula) > claseAulaMax {
 		errs["aula"] = "El aula no puede tener más de 60 caracteres"
+	}
+
+	if !slices.Contains(TiposClase, d.Tipo) {
+		errs["tipo"] = "El tipo tiene que ser clase, trabajo u otro"
+	}
+
+	if d.Hasta != nil {
+		if _, err := time.Parse(FormatoFecha, *d.Hasta); err != nil {
+			errs["hasta"] = "La fecha tiene que tener el formato AAAA-MM-DD"
+		}
 	}
 
 	return errs
