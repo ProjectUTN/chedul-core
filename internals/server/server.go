@@ -251,6 +251,11 @@ func (s *Server) SetupRoutes() {
 	estudio.GET("/resumen", estudioHandler.Resumen)
 	estudio.GET("/ranking", estudioHandler.Ranking)
 	estudio.PUT("/ranking", estudioHandler.SetParticipacion)
+	estudio.PUT("/meta", estudioHandler.SetMeta)
+	estudio.GET("/tareas", estudioHandler.ListTareas)
+	estudio.POST("/tareas", estudioHandler.CreateTarea)
+	estudio.PUT("/tareas/:id", estudioHandler.UpdateTarea)
+	estudio.DELETE("/tareas/:id", estudioHandler.DeleteTarea)
 
 	clases := protectedAPI.Group("/clases")
 	clases.GET("", calendarioHandler.ListClases)

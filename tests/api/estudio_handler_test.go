@@ -80,6 +80,8 @@ func (s *EstudioHandlerSuite) TestSesionesYResumen() {
 	var resumen struct {
 		HoyMinutos    int `json:"hoy_minutos"`
 		SemanaMinutos int `json:"semana_minutos"`
+		MesMinutos    int `json:"mes_minutos"`
+		MetaDiaria    int `json:"meta_diaria"`
 		RachaDias     int `json:"racha_dias"`
 		PorDia        []struct {
 			Fecha   string `json:"fecha"`
@@ -94,8 +96,10 @@ func (s *EstudioHandlerSuite) TestSesionesYResumen() {
 	s.Equal(75, resumen.HoyMinutos)
 	s.Equal(75, resumen.SemanaMinutos)
 	s.Equal(1, resumen.RachaDias)
-	s.Len(resumen.PorDia, 28)
-	s.Equal(75, resumen.PorDia[27].Minutos)
+	s.Len(resumen.PorDia, 182)
+	s.Equal(75, resumen.PorDia[181].Minutos)
+	s.Equal(75, resumen.MesMinutos)
+	s.Equal(120, resumen.MetaDiaria)
 	s.Require().Len(resumen.PorMateria, 2)
 	s.Nil(resumen.PorMateria[0].MateriaID)
 	s.Equal(50, resumen.PorMateria[0].Minutos)
@@ -176,4 +180,111 @@ func TestEstudioSuite(t *testing.T) {
 	}
 
 	suite.Run(t, new(EstudioHandlerSuite))
+}
+
+func (s *EstudioHandlerSuite) TestMetaDiaria() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Kari Luna", "kari.estudio@chedul.com")
+
+	resp := c.JSON("PUT", "/estudio/meta", map[string]any{"minutos": 90})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	for _, minutos := range []int{0, 14, 721} {
+		resp = c.JSON("PUT", "/estudio/meta", map[string]any{"minutos": minutos})
+		s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+	}
+
+	resp = c.JSON("GET", "/estudio/resumen", nil)
+	var resumen struct {
+		MetaDiaria int `json:"meta_diaria"`
+	}
+	resp.JSON(s.T(), &resumen)
+	s.Equal(90, resumen.MetaDiaria)
+}
+
+func (s *EstudioHandlerSuite) TestTareas() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Lara Paz", "lara.estudio@chedul.com")
+	aed := c.MateriaID("isi-aed")
+
+	type tareaTest struct {
+		ID      int64  `json:"id"`
+		Titulo  string `json:"titulo"`
+		Hecha   bool   `json:"hecha"`
+		Materia *struct {
+			ID int64 `json:"id"`
+		} `json:"materia"`
+	}
+
+	resp := c.JSON("POST", "/estudio/tareas", map[string]any{"titulo": "  Repasar listas  ", "materia_id": aed})
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+	var repasar tareaTest
+	resp.JSON(s.T(), &repasar)
+	s.Equal("Repasar listas", repasar.Titulo)
+	s.False(repasar.Hecha)
+	s.Require().NotNil(repasar.Materia)
+	s.Equal(aed, repasar.Materia.ID)
+
+	resp = c.JSON("POST", "/estudio/tareas", map[string]any{"titulo": "Leer el apunte"})
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+
+	for _, payload := range []map[string]any{
+		{"titulo": "   "},
+		{"titulo": "Algo", "materia_id": 999999},
+	} {
+		resp = c.JSON("POST", "/estudio/tareas", payload)
+		s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+	}
+
+	resp = c.JSON("PUT", ruta("/estudio/tareas/%d", repasar.ID), map[string]any{"titulo": "Repasar listas", "materia_id": aed, "hecha": true})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	resp.JSON(s.T(), &repasar)
+	s.True(repasar.Hecha)
+
+	// Las pendientes van primero
+	resp = c.JSON("GET", "/estudio/tareas", nil)
+	var tareas []tareaTest
+	resp.JSON(s.T(), &tareas)
+	s.Require().Len(tareas, 2)
+	s.Equal("Leer el apunte", tareas[0].Titulo)
+	s.True(tareas[1].Hecha)
+
+	// Otro alumno no las ve ni las toca
+	otro := NewClient(s.T(), s.app)
+	otro.Registrar("Mati", "mati.estudio@chedul.com")
+	s.Equal(http.StatusNotFound, otro.JSON("PUT", ruta("/estudio/tareas/%d", repasar.ID), map[string]any{"titulo": "x"}).Status)
+	s.Equal(http.StatusNotFound, otro.JSON("DELETE", ruta("/estudio/tareas/%d", repasar.ID), nil).Status)
+
+	s.Equal(http.StatusNoContent, c.JSON("DELETE", ruta("/estudio/tareas/%d", repasar.ID), nil).Status)
+	resp = c.JSON("GET", "/estudio/tareas", nil)
+	resp.JSON(s.T(), &tareas)
+	s.Len(tareas, 1)
+}
+
+func (s *EstudioHandlerSuite) TestNoMeInteresaSoloElectivas() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Nico Ruiz", "nico.electivas@chedul.com")
+	noMeInteresa := c.CondicionID("No me interesa")
+	electiva := c.MateriaID("isi-qca")
+	obligatoria := c.MateriaID("isi-aed")
+
+	resp := c.JSON("PUT", ruta("/condicion_alumno/%d", obligatoria), map[string]any{"condicion_id": noMeInteresa})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+
+	resp = c.JSON("PUT", ruta("/condicion_alumno/%d", electiva), map[string]any{"condicion_id": noMeInteresa})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+
+	// La electiva descartada no aparece en ninguna lista del progreso
+	resp = c.JSON("GET", "/alumnos/me/progreso", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var progreso map[string]any
+	resp.JSON(s.T(), &progreso)
+	for clave, valor := range progreso {
+		lista, ok := valor.([]any)
+		if !ok {
+			continue
+		}
+		for _, m := range lista {
+			s.NotEqual(float64(electiva), m.(map[string]any)["id"], "la electiva aparece en %s", clave)
+		}
+	}
 }

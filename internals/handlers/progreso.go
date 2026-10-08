@@ -14,6 +14,8 @@ const (
 	condicionRegularizada = "Regularizada"
 	condicionCursando     = "Cursando"
 	condicionPendiente    = "Pendiente"
+	// Solo para electivas: el alumno no la va a cursar y no aparece en ninguna lista
+	condicionNoMeInteresa = "No me interesa"
 )
 
 type ProgresoHandler struct {
@@ -67,7 +69,10 @@ type Ordenanza531 struct {
 	Faltantes      []MateriaSimple `json:"faltantes"`
 }
 
-const tipoObligatoria = "Obligatoria"
+const (
+	tipoObligatoria = "Obligatoria"
+	tipoElectiva    = "Electiva"
+)
 
 // cuentaPara531 indica si la materia entra en la cuenta: obligatoria y con cursado.
 func cuentaPara531(m domain.Materia) bool {
@@ -179,6 +184,8 @@ func CalcularProgreso(alumnoID int64, materias []domain.Materia, condiciones []d
 			case condicionCursando:
 				simple.Mensaje = "Actualmente cursando"
 				resp.MateriasCursando = append(resp.MateriasCursando, simple)
+			case condicionNoMeInteresa:
+				// Electiva descartada: no va ni en pendientes ni en "podés cursar"
 			}
 			continue
 		}

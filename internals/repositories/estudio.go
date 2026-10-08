@@ -167,3 +167,117 @@ func (r *estudioRepository) Ranking(ctx context.Context, desde, hasta string) ([
 		Scan(ctx, &filas)
 	return filas, err
 }
+
+func (r *estudioRepository) MetaDiaria(ctx context.Context, alumnoID int64) (int, error) {
+	var minutos int
+	err := r.db.NewSelect().
+		TableExpr("alumno").
+		Column("meta_diaria_minutos").
+		Where("id = ?", alumnoID).
+		Scan(ctx, &minutos)
+	return minutos, err
+}
+
+func (r *estudioRepository) SetMetaDiaria(ctx context.Context, alumnoID int64, minutos int) error {
+	_, err := r.db.NewUpdate().
+		TableExpr("alumno").
+		Set("meta_diaria_minutos = ?", minutos).
+		Where("id = ?", alumnoID).
+		Exec(ctx)
+	return err
+}
+
+type TareaEstudioModel struct {
+	bun.BaseModel `bun:"table:tarea_estudio"`
+	ID            int64  `bun:"id,pk,autoincrement"`
+	AlumnoID      int64  `bun:"alumno_id,notnull"`
+	MateriaID     *int64 `bun:"materia_id"`
+	Titulo        string `bun:"titulo,notnull"`
+	Hecha         bool   `bun:"hecha,notnull"`
+}
+
+type tareaRow struct {
+	ID            int64          `bun:"id"`
+	Titulo        string         `bun:"titulo"`
+	Hecha         bool           `bun:"hecha"`
+	Creada        string         `bun:"creada"`
+	MateriaID     sql.NullInt64  `bun:"materia_id"`
+	MateriaNombre sql.NullString `bun:"materia_nombre"`
+}
+
+func (row tareaRow) toDomain() domain.TareaEstudio {
+	return domain.TareaEstudio{
+		ID:      row.ID,
+		Titulo:  row.Titulo,
+		Hecha:   row.Hecha,
+		Creada:  row.Creada,
+		Materia: materiaResumen(row.MateriaID, row.MateriaNombre),
+	}
+}
+
+func (r *estudioRepository) selectTareas(alumnoID int64) *bun.SelectQuery {
+	return r.db.NewSelect().
+		TableExpr("tarea_estudio AS t").
+		ColumnExpr("t.id, t.titulo, t.hecha").
+		ColumnExpr(`to_char(t.creada AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS creada`).
+		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
+		Join("LEFT JOIN materia AS m ON m.id = t.materia_id").
+		Where("t.alumno_id = ?", alumnoID)
+}
+
+// ListTareas devuelve primero las pendientes y despues las hechas, las mas nuevas arriba
+func (r *estudioRepository) ListTareas(ctx context.Context, alumnoID int64) ([]domain.TareaEstudio, error) {
+	var rows []tareaRow
+	if err := r.selectTareas(alumnoID).OrderExpr("t.hecha ASC, t.creada DESC, t.id DESC").Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	tareas := make([]domain.TareaEstudio, len(rows))
+	for i, row := range rows {
+		tareas[i] = row.toDomain()
+	}
+	return tareas, nil
+}
+
+func (r *estudioRepository) GetTarea(ctx context.Context, alumnoID, id int64) (*domain.TareaEstudio, error) {
+	var rows []tareaRow
+	if err := r.selectTareas(alumnoID).Where("t.id = ?", id).Scan(ctx, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, domain.ErrTareaNoEncontrada
+	}
+	tarea := rows[0].toDomain()
+	return &tarea, nil
+}
+
+func (r *estudioRepository) CreateTarea(ctx context.Context, alumnoID int64, datos domain.DatosTarea) (int64, error) {
+	model := TareaEstudioModel{
+		AlumnoID:  alumnoID,
+		MateriaID: datos.MateriaID,
+		Titulo:    datos.Titulo,
+		Hecha:     datos.Hecha,
+	}
+	if _, err := r.db.NewInsert().Model(&model).Returning("id").Exec(ctx); err != nil {
+		return 0, err
+	}
+	return model.ID, nil
+}
+
+func (r *estudioRepository) UpdateTarea(ctx context.Context, alumnoID, id int64, datos domain.DatosTarea) error {
+	res, err := r.db.NewUpdate().
+		Model((*TareaEstudioModel)(nil)).
+		Set("titulo = ?", datos.Titulo).
+		Set("materia_id = ?", datos.MateriaID).
+		Set("hecha = ?", datos.Hecha).
+		Where("id = ? AND alumno_id = ?", id, alumnoID).
+		Exec(ctx)
+	return filasAfectadas(res, err, domain.ErrTareaNoEncontrada)
+}
+
+func (r *estudioRepository) DeleteTarea(ctx context.Context, alumnoID, id int64) error {
+	res, err := r.db.NewDelete().
+		Model((*TareaEstudioModel)(nil)).
+		Where("id = ? AND alumno_id = ?", id, alumnoID).
+		Exec(ctx)
+	return filasAfectadas(res, err, domain.ErrTareaNoEncontrada)
+}

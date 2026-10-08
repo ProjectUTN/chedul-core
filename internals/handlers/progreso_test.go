@@ -42,3 +42,14 @@ func TestCalcularOrdenanza531(t *testing.T) {
 	assert.False(t, r.Puede)
 	assert.Empty(t, r.Faltantes)
 }
+
+func TestCalcularProgresoSinElectivasDescartadas(t *testing.T) {
+	materias := []domain.Materia{
+		{ID: 1, Nombre: "Agilidad Avanzada", Nivel: 4, Tipo: "Electiva"},
+		{ID: 2, Nombre: "Ciberseguridad", Nivel: 4, Tipo: "Electiva"},
+	}
+	r := CalcularProgreso(1, materias, []domain.CondicionPorAlumno{{MateriaID: 1, Condicion: "No me interesa"}})
+	assert.Len(t, r.MateriasPendientesDisponibles, 1)
+	assert.Equal(t, int64(2), r.MateriasPendientesDisponibles[0].ID)
+	assert.Empty(t, r.MateriasPendientesNoDisponibles)
+}

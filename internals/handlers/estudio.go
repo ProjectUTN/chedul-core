@@ -14,7 +14,8 @@ import (
 
 const (
 	sesionesRecientes = 20
-	diasDelGrafico    = 28
+	// 26 semanas: alcanza para el calendario de actividad y la cotizacion
+	diasDelGrafico    = 182
 	diasDeRacha       = 366
 	puestosDelRanking = 20
 )
@@ -120,9 +121,11 @@ func (h *EstudioHandler) DeleteSesion(c echo.Context) error {
 type ResumenEstudio struct {
 	HoyMinutos    int `json:"hoy_minutos"`
 	SemanaMinutos int `json:"semana_minutos"`
+	MesMinutos    int `json:"mes_minutos"`
+	MetaDiaria    int `json:"meta_diaria"`
 	// Dias seguidos estudiando hasta hoy; si hoy todavia no estudio, hasta ayer
 	RachaDias int `json:"racha_dias"`
-	// Los ultimos 28 dias, incluidos los que no estudio
+	// Los ultimos 182 dias, incluidos los que no estudio
 	PorDia []domain.MinutosPorDia `json:"por_dia"`
 	// Lo de esta semana (de lunes a hoy)
 	PorMateria []domain.MinutosPorMateria `json:"por_materia"`
@@ -167,6 +170,11 @@ func (h *EstudioHandler) Resumen(c echo.Context) error {
 		return err
 	}
 
+	meta, err := h.repo.MetaDiaria(ctx, alumnoID)
+	if err != nil {
+		return err
+	}
+
 	minutos := make(map[string]int, len(dias))
 	for _, d := range dias {
 		minutos[d.Fecha] = d.Minutos
@@ -174,12 +182,17 @@ func (h *EstudioHandler) Resumen(c echo.Context) error {
 
 	resp := ResumenEstudio{
 		HoyMinutos: minutos[dia(hoy)],
+		MetaDiaria: meta,
 		RachaDias:  CalcularRacha(dias, hoy),
 		PorDia:     make([]domain.MinutosPorDia, 0, diasDelGrafico),
 		PorMateria: porMateria,
 	}
 	for f := lunes; !f.After(hoy); f = f.AddDate(0, 0, 1) {
 		resp.SemanaMinutos += minutos[dia(f)]
+	}
+	primeroDelMes := time.Date(hoy.Year(), hoy.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for f := primeroDelMes; !f.After(hoy); f = f.AddDate(0, 0, 1) {
+		resp.MesMinutos += minutos[dia(f)]
 	}
 	for i := diasDelGrafico - 1; i >= 0; i-- {
 		f := dia(hoy.AddDate(0, 0, -i))
@@ -277,4 +290,126 @@ func (h *EstudioHandler) SetParticipacion(c echo.Context) error {
 		return err
 	}
 	return h.Ranking(c)
+}
+
+func (h *EstudioHandler) SetMeta(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	var datos struct {
+		Minutos int `json:"minutos"`
+	}
+	if err := c.Bind(&datos); err != nil {
+		return InvalidJSON()
+	}
+	if datos.Minutos < domain.MetaMinutosMin || datos.Minutos > domain.MetaMinutosMax {
+		return InvalidRequestData(map[string]string{"minutos": "La meta tiene que ser de 15 minutos a 12 horas"})
+	}
+	if err := h.repo.SetMetaDiaria(c.Request().Context(), alumnoID, datos.Minutos); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]int{"meta_diaria": datos.Minutos})
+}
+
+func (h *EstudioHandler) ListTareas(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	tareas, err := h.repo.ListTareas(c.Request().Context(), alumnoID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, tareas)
+}
+
+// leerTarea valida el cuerpo de una tarea y que la materia exista
+func (h *EstudioHandler) leerTarea(c echo.Context) (domain.DatosTarea, error) {
+	var datos domain.DatosTarea
+	if err := c.Bind(&datos); err != nil {
+		return datos, InvalidJSON()
+	}
+	datos.Normalizar()
+	errs := datos.Validate()
+	if datos.MateriaID != nil {
+		if _, err := h.materiaRepo.GetByID(c.Request().Context(), *datos.MateriaID); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return datos, err
+			}
+			errs["materia_id"] = "La materia no existe"
+		}
+	}
+	if len(errs) > 0 {
+		return datos, InvalidRequestData(errs)
+	}
+	return datos, nil
+}
+
+func (h *EstudioHandler) CreateTarea(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	datos, err := h.leerTarea(c)
+	if err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+	id, err := h.repo.CreateTarea(ctx, alumnoID, datos)
+	if err != nil {
+		return err
+	}
+	tarea, err := h.repo.GetTarea(ctx, alumnoID, id)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusCreated, tarea)
+}
+
+func (h *EstudioHandler) UpdateTarea(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	id, err := ParamID(c, "id")
+	if err != nil {
+		return err
+	}
+	datos, err := h.leerTarea(c)
+	if err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+	err = h.repo.UpdateTarea(ctx, alumnoID, id, datos)
+	if errors.Is(err, domain.ErrTareaNoEncontrada) {
+		return NewApiError(http.StatusNotFound, errors.New("Tarea no encontrada"))
+	}
+	if err != nil {
+		return err
+	}
+	tarea, err := h.repo.GetTarea(ctx, alumnoID, id)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, tarea)
+}
+
+func (h *EstudioHandler) DeleteTarea(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	id, err := ParamID(c, "id")
+	if err != nil {
+		return err
+	}
+	err = h.repo.DeleteTarea(c.Request().Context(), alumnoID, id)
+	if errors.Is(err, domain.ErrTareaNoEncontrada) {
+		return NewApiError(http.StatusNotFound, errors.New("Tarea no encontrada"))
+	}
+	if err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
 }
