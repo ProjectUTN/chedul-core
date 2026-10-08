@@ -162,8 +162,13 @@ func (s *Server) SetupMiddleware() {
 	s.Echo.Use(TracingMiddleware(s.Logger, "chedul-core"))
 	s.Echo.Use(CORSMiddleware(s.Config.Server.CorsOrigins))
 	s.Echo.Use(RecoverMiddleware(s.Logger))
-	// Un poco mas que el maximo de archivo para dejar lugar al resto del formulario
-	s.Echo.Use(middleware.BodyLimit(fmt.Sprintf("%dM", s.Config.Uploads.MaxSizeMB+1)))
+	// Un poco mas que el maximo de archivo para dejar lugar al resto del
+	// formulario. Sin subidas (como en produccion) alcanza con 1 MB.
+	limite := fmt.Sprintf("%dM", s.Config.Uploads.MaxSizeMB+1)
+	if s.Config.Uploads.Disabled {
+		limite = "1M"
+	}
+	s.Echo.Use(middleware.BodyLimit(limite))
 }
 
 func (s *Server) SetupRoutes() {
@@ -194,13 +199,15 @@ func (s *Server) SetupRoutes() {
 
 	api := s.Echo.Group("/api/v1")
 
-	// Rutas publicas
-	api.POST("/signup", alumnoHandler.SignUp)
-	api.POST("/login", alumnoHandler.LogIn)
+	// Rutas publicas. Registro e ingreso tienen un limite de pedidos por IP y
+	// solo aceptan JSON (un formulario de otra pagina no puede mandarlo).
+	ingreso := []echo.MiddlewareFunc{LimitePorIP(), SoloJSON()}
+	api.POST("/signup", alumnoHandler.SignUp, ingreso...)
+	api.POST("/login", alumnoHandler.LogIn, ingreso...)
 	api.POST("/logout", alumnoHandler.LogOut)
 	api.POST("/refresh-token", alumnoHandler.RefreshToken)
 	api.GET("/auth/google", alumnoHandler.GoogleConfig)
-	api.POST("/auth/google", alumnoHandler.LogInGoogle)
+	api.POST("/auth/google", alumnoHandler.LogInGoogle, ingreso...)
 
 	api.GET("/carreras", carreraHandler.GetAll)
 	api.GET("/carreras/:id", carreraHandler.GetByID)

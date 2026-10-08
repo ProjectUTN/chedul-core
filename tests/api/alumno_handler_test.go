@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -222,4 +224,45 @@ func (s *AlumnoHandlerSuite) TestCambiarPassword() {
 	otro := NewClient(s.T(), s.app)
 	s.Equal(http.StatusUnauthorized, otro.JSON("POST", "/login", map[string]any{"email": "pato.clave@chedul.com", "password": "Chedul-123"}).Status)
 	s.Equal(http.StatusOK, otro.JSON("POST", "/login", map[string]any{"email": "pato.clave@chedul.com", "password": "Nueva-Clave-9"}).Status)
+}
+
+// pedidoDesde manda un POST JSON como si viniera de otra IP (por el proxy)
+func (s *AlumnoHandlerSuite) pedidoDesde(ip, path, contentType, body string) int {
+	req, err := http.NewRequest("POST", s.app.Address+"/api/v1"+path, strings.NewReader(body))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Forwarded-For", ip+", 10.0.0.1")
+	resp, err := http.DefaultClient.Do(req)
+	s.Require().NoError(err)
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func (s *AlumnoHandlerSuite) TestLoginLimitaIntentosPorCorreo() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Tobi", "tobi@chedul.com")
+
+	// Registrar ya gasto un intento (el login que hace despues del registro)
+	body := `{"email":"tobi@chedul.com","password":"incorrecta"}`
+	for i := range 9 {
+		s.Equal(http.StatusUnauthorized, s.pedidoDesde(fmt.Sprintf("198.51.100.%d", i), "/login", "application/json", body))
+	}
+	// Aunque cambie de IP, el correo ya no admite mas intentos por un rato
+	s.Equal(http.StatusTooManyRequests, s.pedidoDesde("198.51.100.99", "/login", "application/json", body))
+}
+
+func (s *AlumnoHandlerSuite) TestLoginLimitaPedidosPorIP() {
+	ip := "203.0.113.7"
+	codigos := map[int]int{}
+	for i := range 25 {
+		body := fmt.Sprintf(`{"email":"nadie%d@chedul.com","password":"incorrecta"}`, i)
+		codigos[s.pedidoDesde(ip, "/login", "application/json", body)]++
+	}
+	s.Equal(20, codigos[http.StatusUnauthorized])
+	s.Equal(5, codigos[http.StatusTooManyRequests])
+}
+
+func (s *AlumnoHandlerSuite) TestLoginSoloAceptaJSON() {
+	s.Equal(http.StatusUnsupportedMediaType,
+		s.pedidoDesde("192.0.2.1", "/login", "application/x-www-form-urlencoded", "email=a@b.com&password=123456"))
 }

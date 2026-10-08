@@ -19,6 +19,16 @@ const (
 	keyLength   = 32
 )
 
+// Cada hash de argon2 usa 19 MiB. Sin un cupo, muchos registros o logins a la
+// vez dejan al servidor sin memoria (tiene 256 MiB).
+var cupoArgon = make(chan struct{}, 3)
+
+func argonKey(clave, salt []byte, it, mem uint32, par uint8, largo uint32) []byte {
+	cupoArgon <- struct{}{}
+	defer func() { <-cupoArgon }()
+	return argon2.IDKey(clave, salt, it, mem, par, largo)
+}
+
 type Password struct {
 	inner string
 }
@@ -63,7 +73,7 @@ func hash(s string) (string, error) {
 		return "", fmt.Errorf("no se pudo generar la sal: %w", err)
 	}
 
-	hash := argon2.IDKey([]byte(s), salt, iterations, memory, parallelism, keyLength)
+	hash := argonKey([]byte(s), salt, iterations, memory, parallelism, keyLength)
 
 	encoded := fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
 		memory, iterations, parallelism,
@@ -105,7 +115,7 @@ func CheckPassword(hashed, password string) (bool, error) {
 		return false, fmt.Errorf("hash corrupto: %w", err)
 	}
 
-	computed := argon2.IDKey([]byte(password), salt, it, mem, par, uint32(len(expectedHash)))
+	computed := argonKey([]byte(password), salt, it, mem, par, uint32(len(expectedHash)))
 
 	if subtle.ConstantTimeCompare(computed, expectedHash) == 1 {
 		return true, nil

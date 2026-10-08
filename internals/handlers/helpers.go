@@ -72,17 +72,26 @@ func ParamID(c echo.Context, name string) (int64, error) {
 
 type CustomClaims struct {
 	Sub int64 `json:"sub"`
+	// Tipo separa el access token del refresh token, asi el refresh (que dura
+	// 30 dias) no sirve para llamar a la API.
+	Tipo string `json:"typ,omitempty"`
 	jwt.RegisteredClaims
 }
+
+const (
+	tipoAccess  = "access"
+	tipoRefresh = "refresh"
+)
 
 const (
 	AccessTokenDuration  = 15 * time.Minute
 	RefreshTokenDuration = 30 * 24 * time.Hour
 )
 
-func generateToken(alumnoID int64, secretKey string, duration time.Duration) (string, error) {
+func generateToken(alumnoID int64, secretKey, tipo string, duration time.Duration) (string, error) {
 	claims := &CustomClaims{
-		Sub: alumnoID,
+		Sub:  alumnoID,
+		Tipo: tipo,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -94,7 +103,7 @@ func generateToken(alumnoID int64, secretKey string, duration time.Duration) (st
 }
 
 func GenerateAccessToken(alumnoID int64, secretKey string) (string, error) {
-	token, err := generateToken(alumnoID, secretKey, AccessTokenDuration)
+	token, err := generateToken(alumnoID, secretKey, tipoAccess, AccessTokenDuration)
 	if err != nil {
 		return "", fmt.Errorf("error firmando access token: %w", err)
 	}
@@ -102,7 +111,7 @@ func GenerateAccessToken(alumnoID int64, secretKey string) (string, error) {
 }
 
 func GenerateRefreshToken(alumnoID int64, secretKey string) (string, error) {
-	token, err := generateToken(alumnoID, secretKey, RefreshTokenDuration)
+	token, err := generateToken(alumnoID, secretKey, tipoRefresh, RefreshTokenDuration)
 	if err != nil {
 		return "", fmt.Errorf("error firmando refresh token: %w", err)
 	}
@@ -126,5 +135,30 @@ func ParseToken(tokenString, secretKey string) (*CustomClaims, error) {
 		return nil, fmt.Errorf("token inválido")
 	}
 
+	return claims, nil
+}
+
+// ParseAccessToken solo acepta access tokens.
+func ParseAccessToken(tokenString, secretKey string) (*CustomClaims, error) {
+	claims, err := ParseToken(tokenString, secretKey)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Tipo != tipoAccess {
+		return nil, fmt.Errorf("no es un access token")
+	}
+	return claims, nil
+}
+
+// ParseRefreshToken solo acepta refresh tokens. Los emitidos antes de que
+// existiera el tipo no lo tienen y se siguen aceptando hasta que venzan.
+func ParseRefreshToken(tokenString, secretKey string) (*CustomClaims, error) {
+	claims, err := ParseToken(tokenString, secretKey)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Tipo != tipoRefresh && claims.Tipo != "" {
+		return nil, fmt.Errorf("no es un refresh token")
+	}
 	return claims, nil
 }
