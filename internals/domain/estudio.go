@@ -4,9 +4,14 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
+	"unicode/utf8"
 )
 
-var ErrSesionNoEncontrada = errors.New("sesion de estudio no encontrada")
+var (
+	ErrSesionNoEncontrada = errors.New("sesion de estudio no encontrada")
+	ErrTareaNoEncontrada  = errors.New("tarea de estudio no encontrada")
+)
 
 // ModosEstudio son las formas de medir una sesion: pomodoro (bloques fijos)
 // o libre (cronometro).
@@ -16,6 +21,10 @@ var ModosEstudio = []string{"pomodoro", "libre"}
 const (
 	SesionMinutosMin = 1
 	SesionMinutosMax = 720
+	// La meta diaria va de 15 minutos a 12 horas
+	MetaMinutosMin = 15
+	MetaMinutosMax = 720
+	TituloTareaMax = 200
 	// ZonaHoraria define en que dia cae cada sesion
 	ZonaHoraria = "America/Argentina/Buenos_Aires"
 )
@@ -79,6 +88,36 @@ type FilaRanking struct {
 	Minutos  int    `bun:"minutos"`
 }
 
+// TareaEstudio es algo que el alumno anota para estudiar, opcionalmente de una materia.
+type TareaEstudio struct {
+	ID      int64           `json:"id"`
+	Titulo  string          `json:"titulo"`
+	Hecha   bool            `json:"hecha"`
+	Creada  string          `json:"creada"`
+	Materia *MateriaResumen `json:"materia"`
+}
+
+type DatosTarea struct {
+	Titulo    string `json:"titulo"`
+	MateriaID *int64 `json:"materia_id"`
+	Hecha     bool   `json:"hecha"`
+}
+
+func (d *DatosTarea) Normalizar() {
+	d.Titulo = strings.TrimSpace(d.Titulo)
+	d.MateriaID = normalizarMateria(d.MateriaID)
+}
+
+func (d *DatosTarea) Validate() map[string]string {
+	errs := make(map[string]string)
+	if d.Titulo == "" {
+		errs["titulo"] = "Escribí qué tenés que hacer"
+	} else if utf8.RuneCountInString(d.Titulo) > TituloTareaMax {
+		errs["titulo"] = "Máximo 200 caracteres"
+	}
+	return errs
+}
+
 type EstudioRepository interface {
 	CreateSesion(ctx context.Context, alumnoID int64, datos DatosSesion) (int64, error)
 	GetSesion(ctx context.Context, alumnoID, id int64) (*SesionEstudio, error)
@@ -94,4 +133,13 @@ type EstudioRepository interface {
 	// Ranking devuelve a todos los que participan con sus minutos del rango,
 	// de mas a menos.
 	Ranking(ctx context.Context, desde, hasta string) ([]FilaRanking, error)
+
+	MetaDiaria(ctx context.Context, alumnoID int64) (int, error)
+	SetMetaDiaria(ctx context.Context, alumnoID int64, minutos int) error
+
+	ListTareas(ctx context.Context, alumnoID int64) ([]TareaEstudio, error)
+	GetTarea(ctx context.Context, alumnoID, id int64) (*TareaEstudio, error)
+	CreateTarea(ctx context.Context, alumnoID int64, datos DatosTarea) (int64, error)
+	UpdateTarea(ctx context.Context, alumnoID, id int64, datos DatosTarea) error
+	DeleteTarea(ctx context.Context, alumnoID, id int64) error
 }

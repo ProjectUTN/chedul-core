@@ -67,7 +67,8 @@ func (h *CondicionAlumnoHandler) SetCondicion(c echo.Context) error {
 		return InvalidRequestData(errs)
 	}
 
-	if _, err := h.materiaRepo.GetByID(ctx, materiaID); err != nil {
+	materia, err := h.materiaRepo.GetByID(ctx, materiaID)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return NotFound("Materia")
 		}
@@ -78,14 +79,17 @@ func (h *CondicionAlumnoHandler) SetCondicion(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	existe := false
-	for _, cond := range condiciones {
-		if cond.ID == req.CondicionID {
-			existe = true
+	var elegida *domain.Condicion
+	for i := range condiciones {
+		if condiciones[i].ID == req.CondicionID {
+			elegida = &condiciones[i]
 		}
 	}
-	if !existe {
+	if elegida == nil {
 		return InvalidRequestData(map[string]string{"condicion_id": "La condición no existe"})
+	}
+	if elegida.Condicion == condicionNoMeInteresa && materia.Tipo != tipoElectiva {
+		return InvalidRequestData(map[string]string{"condicion_id": "Solo las electivas se pueden marcar como \"No me interesa\""})
 	}
 
 	condicion := domain.CondicionAlumno{
