@@ -4,6 +4,8 @@ import (
 	"chedul-core/internals/domain"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 
 	"github.com/uptrace/bun"
 )
@@ -158,11 +160,11 @@ func (r *estudioRepository) Ranking(ctx context.Context, desde, hasta string) ([
 	filas := []domain.FilaRanking{}
 	err := r.db.NewSelect().
 		TableExpr("alumno AS a").
-		ColumnExpr("a.id AS alumno_id, a.nombre").
+		ColumnExpr("a.id AS alumno_id, a.nombre, a.apellido").
 		ColumnExpr("coalesce(sum(s.minutos), 0)::int AS minutos").
 		Join("LEFT JOIN sesion_estudio AS s ON s.alumno_id = a.id AND "+diaLocal+" BETWEEN ?::date AND ?::date", desde, hasta).
 		Where("a.en_ranking").
-		GroupExpr("a.id, a.nombre").
+		GroupExpr("a.id, a.nombre, a.apellido").
 		OrderExpr("minutos DESC, a.id ASC").
 		Scan(ctx, &filas)
 	return filas, err
@@ -280,4 +282,40 @@ func (r *estudioRepository) DeleteTarea(ctx context.Context, alumnoID, id int64)
 		Where("id = ? AND alumno_id = ?", id, alumnoID).
 		Exec(ctx)
 	return filasAfectadas(res, err, domain.ErrTareaNoEncontrada)
+}
+
+func (r *estudioRepository) GetTemporizador(ctx context.Context, alumnoID int64) (*domain.Temporizador, error) {
+	var crudo []byte
+	var rev int
+	err := r.db.QueryRowContext(ctx, "select estado, rev from temporizador where alumno_id = ?", alumnoID).Scan(&crudo, &rev)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	t := domain.Temporizador{Rev: rev}
+	if err := json.Unmarshal(crudo, &t.Estado); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *estudioRepository) GuardarTemporizador(ctx context.Context, alumnoID int64, estado domain.EstadoTemporizador, revBase int) (*domain.Temporizador, bool, error) {
+	crudo, err := json.Marshal(estado)
+	if err != nil {
+		return nil, false, err
+	}
+	var rev int
+	err = r.db.QueryRowContext(ctx, `insert into temporizador (alumno_id, estado) values (?, ?::jsonb)
+		on conflict (alumno_id) do update set estado = excluded.estado, rev = temporizador.rev + 1, actualizado = now()
+		where temporizador.rev = ? returning rev`, alumnoID, string(crudo), revBase).Scan(&rev)
+	if errors.Is(err, sql.ErrNoRows) {
+		actual, err := r.GetTemporizador(ctx, alumnoID)
+		return actual, false, err
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &domain.Temporizador{Estado: estado, Rev: rev}, true, nil
 }

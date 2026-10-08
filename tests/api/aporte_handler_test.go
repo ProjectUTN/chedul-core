@@ -104,6 +104,15 @@ func (s *AporteHandlerSuite) TestSubirArchivoListarYDescargar() {
 	s.Equal(am1, creado.Materia.ID)
 	s.Equal("Resumen", creado.Tag.Nombre)
 	s.Equal("Ana", creado.Autor.Nombre)
+
+	// Con apellido, los demas ven nombre e inicial
+	resp = ana.JSON("PUT", "/alumnos/me", map[string]any{"nombre": "Ana María", "apellido": "Pérez Gómez", "carrera_id": 1})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	for _, item := range s.listar(ana, "").Items {
+		if item.ID == creado.ID {
+			s.Equal("Ana P.", item.Autor.Nombre)
+		}
+	}
 	s.True(creado.EsMio)
 	s.Require().NotNil(creado.Archivo)
 	s.Equal("resumen AM1.pdf", creado.Archivo.Nombre, "el nombre no conserva carpetas")

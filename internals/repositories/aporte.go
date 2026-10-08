@@ -56,6 +56,7 @@ type aporteRow struct {
 	TagNombre     string         `bun:"tag_nombre"`
 	AutorID       int64          `bun:"autor_id"`
 	AutorNombre   string         `bun:"autor_nombre"`
+	AutorApellido string         `bun:"autor_apellido"`
 	Favoritos     int            `bun:"favoritos"`
 	EsFavorito    bool           `bun:"es_favorito"`
 	Total         int            `bun:"total"`
@@ -69,7 +70,7 @@ func (row aporteRow) toDomain(viewerID int64) domain.Aporte {
 		Link:        row.Link,
 		CreadoEn:    row.CreadoEn,
 		Tag:         domain.AporteTag{ID: row.TagID, Nombre: row.TagNombre},
-		Autor:       domain.AporteAutor{ID: row.AutorID, Nombre: row.AutorNombre},
+		Autor:       domain.AporteAutor{ID: row.AutorID, Nombre: domain.NombreCorto(row.AutorNombre, row.AutorApellido)},
 		Favoritos:   row.Favoritos,
 		EsFavorito:  row.EsFavorito,
 		EsMio:       row.AutorID == viewerID,
@@ -110,7 +111,7 @@ func (r *aporteRepository) selectAportes(viewerID int64) *bun.SelectQuery {
 		ColumnExpr("a.archivo_key, a.archivo_nombre, a.archivo_tipo, a.archivo_tamano").
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre, m.nivel AS materia_nivel").
 		ColumnExpr("t.id AS tag_id, t.nombre AS tag_nombre").
-		ColumnExpr("al.id AS autor_id, al.nombre AS autor_nombre").
+		ColumnExpr("al.id AS autor_id, al.nombre AS autor_nombre, al.apellido AS autor_apellido").
 		ColumnExpr("(SELECT count(*) FROM aportes_favoritos f WHERE f.aporte_id = a.id) AS favoritos").
 		ColumnExpr("EXISTS (SELECT 1 FROM aportes_favoritos f WHERE f.aporte_id = a.id AND f.alumno_id = ?) AS es_favorito", viewerID).
 		Join("LEFT JOIN materia AS m ON m.id = a.materia_id").

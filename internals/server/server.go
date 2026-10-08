@@ -276,6 +276,8 @@ func (s *Server) SetupRoutes() {
 	estudio.GET("/sesiones", estudioHandler.ListSesiones)
 	estudio.POST("/sesiones", estudioHandler.CreateSesion)
 	estudio.DELETE("/sesiones/:id", estudioHandler.DeleteSesion)
+	estudio.GET("/temporizador", estudioHandler.GetTemporizador)
+	estudio.PUT("/temporizador", estudioHandler.SetTemporizador)
 	estudio.GET("/resumen", estudioHandler.Resumen)
 	estudio.GET("/ranking", estudioHandler.Ranking)
 	estudio.PUT("/ranking", estudioHandler.SetParticipacion)

@@ -85,6 +85,7 @@ type PuestoRanking struct {
 type FilaRanking struct {
 	AlumnoID int64  `bun:"alumno_id"`
 	Nombre   string `bun:"nombre"`
+	Apellido string `bun:"apellido"`
 	Minutos  int    `bun:"minutos"`
 }
 
@@ -118,7 +119,67 @@ func (d *DatosTarea) Validate() map[string]string {
 	return errs
 }
 
+// Limites del cronometro en curso
+const (
+	FaseFoco       = "foco"
+	FaseDescanso   = "descanso"
+	AcumuladoMaxMs = 24 * 60 * 60 * 1000
+)
+
+// EstadoTemporizador es el cronometro de estudio de un alumno. Los tiempos
+// son milisegundos; Desde es cuando arranco el tramo actual (hora del
+// servidor, en milisegundos Unix) y es nil si esta en pausa o sin empezar.
+type EstadoTemporizador struct {
+	Modo      string `json:"modo"`
+	Fase      string `json:"fase"`
+	Foco      int    `json:"foco"`
+	Descanso  int    `json:"descanso"`
+	MateriaID int64  `json:"materia_id"`
+	Acumulado int64  `json:"acumulado"`
+	Desde     *int64 `json:"desde"`
+}
+
+func (e *EstadoTemporizador) Validate() map[string]string {
+	errs := make(map[string]string)
+	if !slices.Contains(ModosEstudio, e.Modo) {
+		errs["modo"] = "El modo tiene que ser pomodoro o libre"
+	}
+	if e.Fase != FaseFoco && e.Fase != FaseDescanso {
+		errs["fase"] = "La fase tiene que ser foco o descanso"
+	}
+	if e.Foco < SesionMinutosMin || e.Foco > SesionMinutosMax {
+		errs["foco"] = "El foco tiene que durar entre 1 minuto y 12 horas"
+	}
+	if e.Descanso < SesionMinutosMin || e.Descanso > SesionMinutosMax {
+		errs["descanso"] = "El descanso tiene que durar entre 1 minuto y 12 horas"
+	}
+	if e.MateriaID < 0 {
+		errs["materia_id"] = "La materia no es válida"
+	}
+	if e.Acumulado < 0 || e.Acumulado > AcumuladoMaxMs {
+		errs["acumulado"] = "El tiempo acumulado no es válido"
+	}
+	if e.Desde != nil && *e.Desde <= 0 {
+		errs["desde"] = "La hora de inicio no es válida"
+	}
+	return errs
+}
+
+// Temporizador es el estado guardado con su version: Rev sube en cada cambio
+// y quien guarda tiene que decir sobre cual version esta cambiando.
+type Temporizador struct {
+	Estado EstadoTemporizador `json:"estado"`
+	Rev    int                `json:"rev"`
+}
+
 type EstudioRepository interface {
+	// GetTemporizador devuelve nil si el alumno nunca lo uso
+	GetTemporizador(ctx context.Context, alumnoID int64) (*Temporizador, error)
+	// GuardarTemporizador reemplaza el estado solo si la version guardada es
+	// revBase (0 si todavia no hay nada). Si otro dispositivo ya lo cambio
+	// devuelve false y no escribe.
+	GuardarTemporizador(ctx context.Context, alumnoID int64, estado EstadoTemporizador, revBase int) (*Temporizador, bool, error)
+
 	CreateSesion(ctx context.Context, alumnoID int64, datos DatosSesion) (int64, error)
 	GetSesion(ctx context.Context, alumnoID, id int64) (*SesionEstudio, error)
 	ListSesiones(ctx context.Context, alumnoID int64, limite int) ([]SesionEstudio, error)
