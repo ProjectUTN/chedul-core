@@ -22,15 +22,17 @@ type EventoModel struct {
 
 type ClaseModel struct {
 	bun.BaseModel `bun:"table:clase"`
-	ID            int64  `bun:"id,pk,autoincrement"`
-	AlumnoID      int64  `bun:"alumno_id,notnull"`
-	MateriaID     *int64 `bun:"materia_id"`
-	ComisionID    *int64 `bun:"comision_id"`
-	Titulo        string `bun:"titulo,notnull"`
-	Dia           int    `bun:"dia,notnull"`
-	HoraInicio    string `bun:"hora_inicio,notnull"`
-	HoraFin       string `bun:"hora_fin,notnull"`
-	Aula          string `bun:"aula,notnull"`
+	ID            int64   `bun:"id,pk,autoincrement"`
+	AlumnoID      int64   `bun:"alumno_id,notnull"`
+	MateriaID     *int64  `bun:"materia_id"`
+	ComisionID    *int64  `bun:"comision_id"`
+	Titulo        string  `bun:"titulo,notnull"`
+	Dia           int     `bun:"dia,notnull"`
+	HoraInicio    string  `bun:"hora_inicio,notnull"`
+	HoraFin       string  `bun:"hora_fin,notnull"`
+	Aula          string  `bun:"aula,notnull"`
+	Tipo          string  `bun:"tipo,notnull"`
+	Hasta         *string `bun:"hasta,type:date"`
 }
 
 type eventoRow struct {
@@ -70,6 +72,8 @@ type claseRow struct {
 	MateriaNombre sql.NullString `bun:"materia_nombre"`
 	ComisionID    sql.NullInt64  `bun:"comision_id"`
 	Cuatrimestre  sql.NullString `bun:"cuatrimestre"`
+	Tipo          string         `bun:"tipo"`
+	Hasta         sql.NullString `bun:"hasta"`
 }
 
 func (row claseRow) toDomain() domain.Clase {
@@ -81,7 +85,13 @@ func (row claseRow) toDomain() domain.Clase {
 	if row.Cuatrimestre.Valid {
 		cuatrimestre = &row.Cuatrimestre.String
 	}
+	var hasta *string
+	if row.Hasta.Valid {
+		hasta = &row.Hasta.String
+	}
 	return domain.Clase{
+		Tipo:         row.Tipo,
+		Hasta:        hasta,
 		ComisionID:   comisionID,
 		Cuatrimestre: cuatrimestre,
 		ID:           row.ID,
@@ -125,7 +135,8 @@ func (r *calendarioRepository) selectEventos(alumnoID int64) *bun.SelectQuery {
 func (r *calendarioRepository) selectClases(alumnoID int64) *bun.SelectQuery {
 	return r.db.NewSelect().
 		TableExpr("clase AS c").
-		ColumnExpr("c.id, c.titulo, c.dia, c.aula, c.comision_id").
+		ColumnExpr("c.id, c.titulo, c.dia, c.aula, c.comision_id, c.tipo").
+		ColumnExpr("to_char(c.hasta, 'YYYY-MM-DD') AS hasta").
 		ColumnExpr("to_char(c.hora_inicio, 'HH24:MI') AS hora_inicio").
 		ColumnExpr("to_char(c.hora_fin, 'HH24:MI') AS hora_fin").
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
@@ -253,6 +264,8 @@ func (r *calendarioRepository) CreateClase(ctx context.Context, alumnoID int64, 
 		HoraInicio: datos.HoraInicio,
 		HoraFin:    datos.HoraFin,
 		Aula:       datos.Aula,
+		Tipo:       datos.Tipo,
+		Hasta:      datos.Hasta,
 	}
 	if _, err := r.db.NewInsert().Model(&model).Returning("id").Exec(ctx); err != nil {
 		return 0, err
@@ -269,6 +282,8 @@ func (r *calendarioRepository) UpdateClase(ctx context.Context, alumnoID, id int
 		Set("hora_fin = ?", datos.HoraFin).
 		Set("aula = ?", datos.Aula).
 		Set("materia_id = ?", datos.MateriaID).
+		Set("tipo = ?", datos.Tipo).
+		Set("hasta = ?", datos.Hasta).
 		Where("id = ? AND alumno_id = ?", id, alumnoID).
 		Exec(ctx)
 	return filasAfectadas(res, err, domain.ErrClaseNoEncontrada)

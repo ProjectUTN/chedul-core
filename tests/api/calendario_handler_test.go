@@ -32,6 +32,8 @@ type claseTest struct {
 	} `json:"materia"`
 	ComisionID   *int64  `json:"comision_id"`
 	Cuatrimestre *string `json:"cuatrimestre"`
+	Tipo         string  `json:"tipo"`
+	Hasta        *string `json:"hasta"`
 }
 
 type CalendarioHandlerSuite struct {
@@ -157,9 +159,28 @@ func (s *CalendarioHandlerSuite) TestHorarioSemanal() {
 	s.Equal("Lab 3", jueves.Aula)
 	s.Nil(jueves.ComisionID)
 	s.Nil(jueves.Cuatrimestre)
+	s.Equal("clase", jueves.Tipo)
+	s.Nil(jueves.Hasta)
+
+	// Actividad que no es de la facultad y termina en una fecha
+	trabajo := nueva(map[string]any{"titulo": "Trabajo", "tipo": "trabajo", "dia": 5, "hora_inicio": "14:00", "hora_fin": "18:00", "hasta": "2026-12-18"})
+	s.Equal("trabajo", trabajo.Tipo)
+	s.Require().NotNil(trabajo.Hasta)
+	s.Equal("2026-12-18", *trabajo.Hasta)
+	resp0 := c.JSON("PUT", ruta("/clases/%d", trabajo.ID), map[string]any{"titulo": "Trabajo", "tipo": "trabajo", "dia": 5, "hora_inicio": "14:00", "hora_fin": "18:00", "hasta": ""})
+	s.Require().Equal(http.StatusOK, resp0.Status, string(resp0.Body))
+	var editado claseTest
+	resp0.JSON(s.T(), &editado)
+	s.Nil(editado.Hasta)
+	resp0 = c.JSON("POST", "/clases", map[string]any{"titulo": "x", "tipo": "fiesta", "dia": 1, "hora_inicio": "10:00", "hora_fin": "11:00", "hasta": "mañana"})
+	s.Equal(http.StatusUnprocessableEntity, resp0.Status, string(resp0.Body))
+	s.Contains(string(resp0.Body), "tipo")
+	s.Contains(string(resp0.Body), "hasta")
+	resp0 = c.JSON("DELETE", ruta("/clases/%d", trabajo.ID), nil)
+	s.Require().Equal(http.StatusNoContent, resp0.Status, string(resp0.Body))
 
 	// Clase cargada desde una comision: guarda de cual viene
-	resp0 := c.JSON("GET", ruta("/materias/%d/comisiones", aed), nil)
+	resp0 = c.JSON("GET", ruta("/materias/%d/comisiones", aed), nil)
 	var comisiones []struct {
 		ID int64 `json:"id"`
 	}
