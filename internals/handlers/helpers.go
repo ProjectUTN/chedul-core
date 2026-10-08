@@ -75,6 +75,8 @@ type CustomClaims struct {
 	// Tipo separa el access token del refresh token, asi el refresh (que dura
 	// 30 dias) no sirve para llamar a la API.
 	Tipo string `json:"typ,omitempty"`
+	// Version de sesion del alumno cuando se emitio (ver domain.Alumno)
+	Version int `json:"ver,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -88,10 +90,11 @@ const (
 	RefreshTokenDuration = 30 * 24 * time.Hour
 )
 
-func generateToken(alumnoID int64, secretKey, tipo string, duration time.Duration) (string, error) {
+func generateToken(alumnoID int64, secretKey, tipo string, version int, duration time.Duration) (string, error) {
 	claims := &CustomClaims{
-		Sub:  alumnoID,
-		Tipo: tipo,
+		Sub:     alumnoID,
+		Tipo:    tipo,
+		Version: version,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -103,15 +106,15 @@ func generateToken(alumnoID int64, secretKey, tipo string, duration time.Duratio
 }
 
 func GenerateAccessToken(alumnoID int64, secretKey string) (string, error) {
-	token, err := generateToken(alumnoID, secretKey, tipoAccess, AccessTokenDuration)
+	token, err := generateToken(alumnoID, secretKey, tipoAccess, 0, AccessTokenDuration)
 	if err != nil {
 		return "", fmt.Errorf("error firmando access token: %w", err)
 	}
 	return token, nil
 }
 
-func GenerateRefreshToken(alumnoID int64, secretKey string) (string, error) {
-	token, err := generateToken(alumnoID, secretKey, tipoRefresh, RefreshTokenDuration)
+func GenerateRefreshToken(alumnoID int64, version int, secretKey string) (string, error) {
+	token, err := generateToken(alumnoID, secretKey, tipoRefresh, version, RefreshTokenDuration)
 	if err != nil {
 		return "", fmt.Errorf("error firmando refresh token: %w", err)
 	}

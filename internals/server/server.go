@@ -196,6 +196,7 @@ func (s *Server) SetupRoutes() {
 	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
 	estudioHandler := handlers.NewEstudioHandler(estudioRepo, materiaRepo, s.Logger)
 	comunidadHandler := handlers.NewComunidadHandler(comunidadRepo, materiaRepo)
+	adminHandler := handlers.NewAdminHandler(repositories.NewAdminRepository(s.ConnPool), alumnoRepo)
 
 	api := s.Echo.Group("/api/v1")
 
@@ -218,6 +219,9 @@ func (s *Server) SetupRoutes() {
 
 	api.GET("/condicion", condicionHandler.GetAll)
 
+	// Cuantos alumnos usan Chedul (para la landing)
+	api.GET("/estadisticas", adminHandler.Estadisticas)
+
 	// Link de calendario (.ics): lo identifica el token, no la sesion
 	api.GET("/calendario/ics/:archivo", calendarioHandler.ExportarICS)
 
@@ -231,6 +235,12 @@ func (s *Server) SetupRoutes() {
 	me.DELETE("", alumnoHandler.DeleteMe)
 	me.PUT("/password", alumnoHandler.CambiarPassword)
 	me.GET("/progreso", progresoHandler.GetMiProgreso)
+
+	// Panel de administracion
+	admin := protectedAPI.Group("/admin", adminHandler.SoloAdmin)
+	admin.GET("/resumen", adminHandler.Resumen)
+	admin.GET("/alumnos", adminHandler.Alumnos)
+	admin.GET("/accesos", adminHandler.Accesos)
 
 	condicionAlumno := protectedAPI.Group("/condicion_alumno")
 	condicionAlumno.GET("", condicionAlumnoHandler.GetMisCondiciones)

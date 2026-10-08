@@ -4,7 +4,7 @@ import "testing"
 
 func TestRefreshTokenNoSirveComoAccess(t *testing.T) {
 	const secreto = "secreto-de-prueba-secreto-de-prueba"
-	refresh, err := GenerateRefreshToken(7, secreto)
+	refresh, err := GenerateRefreshToken(7, 0, secreto)
 	if err != nil {
 		t.Fatal(err)
 	}

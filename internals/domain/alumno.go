@@ -10,6 +10,12 @@ type Alumno struct {
 	Email    Email    `json:"email"`
 	Carrera  int64    `json:"carrera"`
 	Password Password `json:"-"`
+	// Solo los administradores reciben este campo (y ven el panel)
+	EsAdmin bool `json:"es_admin,omitempty"`
+	// Ya entro alguna vez con Google
+	GoogleVinculado bool `json:"-"`
+	// Va dentro de los tokens; al subirla los refresh tokens viejos dejan de servir
+	VersionSesion int `json:"-"`
 }
 
 // ActualizarAlumnoRequest es lo que el alumno puede cambiar de su propio perfil.
@@ -81,4 +87,15 @@ type AlumnoRepository interface {
 	Create(ctx context.Context, alumno *Alumno) error
 	Update(ctx context.Context, alumno *Alumno) error
 	Delete(ctx context.Context, id int64) error
+	// RegistrarAcceso guarda un inicio de sesion (metodo: clave, google, registro)
+	RegistrarAcceso(ctx context.Context, id int64, metodo string) error
+	// MarcarActivo actualiza la ultima vez que el alumno uso la app
+	MarcarActivo(ctx context.Context, id int64) error
+	// VincularGoogle marca que el alumno entro con Google. Si nuevaClave no es
+	// nil reemplaza la clave y sube la version de sesion.
+	VincularGoogle(ctx context.Context, id int64, nuevaClave *Password) error
+	// SubirVersionSesion invalida los refresh tokens emitidos hasta ahora
+	SubirVersionSesion(ctx context.Context, id int64) (int, error)
+	// Contar devuelve cuantos alumnos hay registrados
+	Contar(ctx context.Context) (int, error)
 }

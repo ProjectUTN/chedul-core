@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -358,28 +359,35 @@ func (s *CalendarioHandlerSuite) TestEventosConfirmadosPorLaComision() {
 		s.Require().Equal(http.StatusCreated, r.Status, string(r.Body))
 	}
 
-	alumnos := []*Client{primero, nuevo("dos.confirmado@chedul.com"), nuevo("tres.confirmado@chedul.com")}
+	alumnos := []*Client{primero}
+	for _, email := range []string{"dos", "tres", "cuatro", "cinco"} {
+		alumnos = append(alumnos, nuevo(email+".confirmado@chedul.com"))
+	}
 	yo := nuevo("yo.confirmado@chedul.com")
 	otraComision := nuevo("otra.confirmado@chedul.com")
 	for _, c := range append(alumnos, yo) {
 		cursar(c, comisiones[0].ID)
 	}
 	cursar(otraComision, comisiones[1].ID)
+	// Solo cuentan las cuentas con unos dias: estas son "viejas"
+	s.app.Envejecer("%.confirmado@chedul.com")
 
-	// Con dos no alcanza, y uno de otra comision o con otra fecha no suma
-	parcial(alumnos[0], "2099-05-20")
-	parcial(alumnos[1], "2099-05-20")
+	// Con cuatro no alcanza, y uno de otra comision o con otra fecha no suma
+	for _, c := range alumnos[:3] {
+		parcial(c, "2099-05-20")
+	}
 	parcial(otraComision, "2099-05-20")
-	parcial(alumnos[2], "2099-05-21")
+	parcial(alumnos[3], "2099-05-21")
+	parcial(alumnos[3], "2099-05-20")
 	s.Empty(s.confirmados(yo))
 
-	parcial(alumnos[2], "2099-05-20")
+	parcial(alumnos[4], "2099-05-20")
 	lista := s.confirmados(yo)
 	s.Require().Len(lista, 1)
 	s.Equal(so, lista[0].Materia.ID)
 	s.Equal(comisiones[0].ID, lista[0].ComisionID)
 	s.Equal("2099-05-20", lista[0].Fecha)
-	s.Equal(3, lista[0].Confirmaciones)
+	s.Equal(5, lista[0].Confirmaciones)
 	s.Require().NotNil(lista[0].Hora)
 	s.Equal("18:00", *lista[0].Hora)
 
@@ -387,20 +395,34 @@ func (s *CalendarioHandlerSuite) TestEventosConfirmadosPorLaComision() {
 	s.Empty(s.confirmados(otraComision))
 	s.Empty(s.confirmados(alumnos[0]))
 
+	// Cuentas recien creadas no confirman nada
+	truchas := make([]*Client, 5)
+	for i := range truchas {
+		truchas[i] = nuevo(fmt.Sprintf("trucha%d.nueva@chedul.com", i))
+		cursar(truchas[i], comisiones[0].ID)
+		parcial(truchas[i], "2099-06-10")
+	}
+	s.Len(s.confirmados(yo), 1, "las cuentas nuevas no suman confirmaciones")
+
 	// Si dice que no es asi deja de verlo; con tantos "no" como confirmaciones
-	// desaparece para todos
+	// desaparece para todos (los "no" de cuentas nuevas tampoco cuentan)
 	desmentir := map[string]any{"materia_id": so, "comision_id": comisiones[0].ID, "tipo": "parcial", "fecha": "2099-05-20"}
 	s.Equal(http.StatusNoContent, yo.JSON("POST", "/eventos/confirmados/desmentir", desmentir).Status)
 	s.Empty(s.confirmados(yo))
+	for _, c := range truchas {
+		s.Equal(http.StatusNoContent, c.JSON("POST", "/eventos/confirmados/desmentir", desmentir).Status)
+	}
 
-	cuarto := nuevo("cuatro.confirmado@chedul.com")
+	cuarto := nuevo("cuarto.desmiente@chedul.com")
 	cursar(cuarto, comisiones[0].ID)
 	s.Len(s.confirmados(cuarto), 1)
-	for _, email := range []string{"cinco.confirmado@chedul.com", "seis.confirmado@chedul.com"} {
-		c := nuevo(email)
+	for i := range 4 {
+		c := nuevo(fmt.Sprintf("no%d.desmiente@chedul.com", i))
 		cursar(c, comisiones[0].ID)
 		s.Equal(http.StatusNoContent, c.JSON("POST", "/eventos/confirmados/desmentir", desmentir).Status)
 	}
+	s.Len(s.confirmados(cuarto), 1, "con cuentas nuevas no alcanza")
+	s.app.Envejecer("%.desmiente@chedul.com")
 	s.Empty(s.confirmados(cuarto))
 
 	s.Equal(http.StatusUnprocessableEntity, yo.JSON("POST", "/eventos/confirmados/desmentir", map[string]any{"materia_id": so, "tipo": "recordatorio", "fecha": "2099-05-20"}).Status)

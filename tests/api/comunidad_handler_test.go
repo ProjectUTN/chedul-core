@@ -66,23 +66,34 @@ func (s *ComunidadHandlerSuite) TestCargarBorrarYReportar() {
 	}
 
 	// Otros la ven pero no la pueden borrar
-	otros := make([]*Client, 3)
-	for i, email := range []string{"beto.comunidad@chedul.com", "caro.comunidad@chedul.com", "dani.comunidad@chedul.com"} {
+	otros := make([]*Client, 6)
+	for i, nombre := range []string{"beto", "caro", "dani", "eli", "fede", "nuevo"} {
 		otros[i] = NewClient(s.T(), s.app)
-		otros[i].Registrar("Otro", email)
+		otros[i].Registrar("Otro", nombre+".comunidad@chedul.com")
+	}
+	// Los reportes solo cuentan de cuentas con unos dias; "nuevo" queda recien creado
+	for _, nombre := range []string{"beto", "caro", "dani", "eli", "fede"} {
+		s.app.Envejecer(nombre + ".comunidad@chedul.com")
 	}
 	lista := s.listar(otros[0])
 	s.Require().Len(lista, 1)
 	s.False(lista[0].EsMia)
 	s.Equal(http.StatusNotFound, otros[0].JSON("DELETE", ruta("/comunidades/%d", grupo.ID), nil).Status)
 
-	// Reportar dos veces cuenta una; con tres alumnos distintos se oculta
-	s.Equal(http.StatusNoContent, otros[0].JSON("POST", ruta("/comunidades/%d/reportar", grupo.ID), nil).Status)
-	s.Equal(http.StatusNoContent, otros[0].JSON("POST", ruta("/comunidades/%d/reportar", grupo.ID), nil).Status)
+	// Reportar dos veces cuenta una; con cinco alumnos distintos (con cuentas
+	// de unos dias) se oculta
+	reportar := func(c *Client) {
+		s.Equal(http.StatusNoContent, c.JSON("POST", ruta("/comunidades/%d/reportar", grupo.ID), nil).Status)
+	}
+	reportar(otros[0])
+	reportar(otros[0])
 	s.True(s.listar(otros[0])[0].Reportada)
-	s.Equal(http.StatusNoContent, otros[1].JSON("POST", ruta("/comunidades/%d/reportar", grupo.ID), nil).Status)
-	s.Len(s.listar(ana), 1)
-	s.Equal(http.StatusNoContent, otros[2].JSON("POST", ruta("/comunidades/%d/reportar", grupo.ID), nil).Status)
+	for _, c := range otros[1:4] {
+		reportar(c)
+	}
+	reportar(otros[5])
+	s.Len(s.listar(ana), 1, "el reporte de la cuenta nueva no cuenta")
+	reportar(otros[4])
 	s.Empty(s.listar(ana))
 	s.Equal(http.StatusNotFound, otros[2].JSON("POST", "/comunidades/999999/reportar", nil).Status)
 

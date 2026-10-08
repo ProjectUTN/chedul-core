@@ -157,11 +157,11 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 
 	h.logger.Info("LogIn: autenticación exitosa", zap.Int64("alumno_id", alumno.ID))
 
-	return h.iniciarSesion(c, alumno)
+	return h.iniciarSesion(c, alumno, "clave")
 }
 
 // iniciarSesion devuelve el access token y deja el refresh token en la cookie.
-func (h *AlumnoHandler) iniciarSesion(c echo.Context, alumno *domain.Alumno) error {
+func (h *AlumnoHandler) iniciarSesion(c echo.Context, alumno *domain.Alumno, metodo string) error {
 	jwtSecret := h.jwtToken.Expose()
 
 	accessToken, err := GenerateAccessToken(alumno.ID, jwtSecret)
@@ -169,17 +169,27 @@ func (h *AlumnoHandler) iniciarSesion(c echo.Context, alumno *domain.Alumno) err
 		return err
 	}
 
-	refreshToken, err := GenerateRefreshToken(alumno.ID, jwtSecret)
-	if err != nil {
+	if err := h.renovarRefresh(c, alumno.ID, alumno.VersionSesion); err != nil {
 		return err
 	}
 
-	h.setRefreshCookie(c, refreshToken, time.Now().Add(RefreshTokenDuration))
+	if err := h.alumnoRepo.RegistrarAcceso(c.Request().Context(), alumno.ID, metodo); err != nil {
+		h.logger.Warn("No se pudo registrar el acceso", zap.Error(err), zap.Int64("alumno_id", alumno.ID))
+	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"accessToken": accessToken,
 		"user":        alumno,
 	})
+}
+
+func (h *AlumnoHandler) renovarRefresh(c echo.Context, alumnoID int64, version int) error {
+	refreshToken, err := GenerateRefreshToken(alumnoID, version, h.jwtToken.Expose())
+	if err != nil {
+		return err
+	}
+	h.setRefreshCookie(c, refreshToken, time.Now().Add(RefreshTokenDuration))
+	return nil
 }
 
 func (h *AlumnoHandler) LogOut(c echo.Context) error {
@@ -204,10 +214,16 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 	}
 
 	// Si el alumno borro su cuenta el refresh token deja de servir
+	// Si cambio la clave (o entro con Google por primera vez) las sesiones
+	// anteriores se cierran
 	alumno, err := h.alumnoRepo.GetByID(ctx, claims.Sub)
-	if err != nil {
+	if err != nil || alumno.VersionSesion != claims.Version {
 		h.setRefreshCookie(c, "", time.Unix(0, 0))
 		return NewApiError(http.StatusUnauthorized, fmt.Errorf("Refresh Token inválido"))
+	}
+
+	if err := h.alumnoRepo.MarcarActivo(ctx, alumno.ID); err != nil {
+		h.logger.Warn("No se pudo marcar actividad", zap.Error(err))
 	}
 
 	newAccessToken, err := GenerateAccessToken(alumno.ID, jwtSecret)
@@ -296,6 +312,14 @@ func (h *AlumnoHandler) CambiarPassword(c echo.Context) error {
 
 	alumno.Password = nueva
 	if err := h.alumnoRepo.Update(ctx, alumno); err != nil {
+		return err
+	}
+	// Cierra las demas sesiones y le deja una nueva a quien la cambio
+	version, err := h.alumnoRepo.SubirVersionSesion(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := h.renovarRefresh(c, id, version); err != nil {
 		return err
 	}
 	h.logger.Info("Clave cambiada", zap.Int64("alumno_id", id))

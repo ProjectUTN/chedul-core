@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -226,8 +227,22 @@ func (d *DatosClase) Validate() map[string]string {
 }
 
 // MinimoConfirmaciones es cuantos alumnos distintos tienen que cargar el
-// mismo evento para que se le sugiera al resto de la comision.
-const MinimoConfirmaciones = 3
+// mismo evento para que se le sugiera al resto de la comision. Solo cuentan
+// las cuentas con al menos DiasParaVotar dias (ver CuentaConfiableSQL).
+const MinimoConfirmaciones = 5
+
+// DiasParaVotar es la antiguedad minima de una cuenta para que sus reportes,
+// confirmaciones y desmentidas cuenten: asi no alcanza con crear cuentas
+// truchas en el momento.
+const DiasParaVotar = 3
+
+// CuentaConfiableSQL es la condicion SQL para que el alumno con id en la
+// columna dada cuente como voto. Las cuentas de antes de guardar la fecha de
+// registro (creado null) son todas viejas.
+func CuentaConfiableSQL(columnaAlumnoID string) string {
+	return fmt.Sprintf("exists (select 1 from alumno ac where ac.id = %s and (ac.creado is null or ac.creado <= now() - interval '%d days'))",
+		columnaAlumnoID, DiasParaVotar)
+}
 
 // TiposConfirmables son los eventos que se comparten entre compañeros.
 var TiposConfirmables = []string{"parcial", "entrega", "final"}
