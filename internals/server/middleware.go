@@ -135,7 +135,7 @@ func RequireAuthMiddleware(secretKey string, logger *zap.Logger) echo.Middleware
 				return handlers.NewApiError(http.StatusUnauthorized, fmt.Errorf("Access Token faltante en encabezado Authorization"))
 			}
 
-			claims, err := handlers.ParseToken(strings.TrimPrefix(authHeader, "Bearer "), secretKey)
+			claims, err := handlers.ParseAccessToken(strings.TrimPrefix(authHeader, "Bearer "), secretKey)
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "token validation failed")

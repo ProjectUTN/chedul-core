@@ -133,6 +133,6 @@ require (
 	golang.org/x/net v0.43.0
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
-	golang.org/x/time v0.12.0 // indirect
+	golang.org/x/time v0.12.0
 	mellium.im/sasl v0.3.2 // indirect
 )

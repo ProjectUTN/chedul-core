@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 
 	"go.uber.org/zap"
 )
@@ -23,6 +25,9 @@ type AlumnoHandler struct {
 	jwtToken       config.Secret
 	googleClientID string
 	validarGoogle  ValidadorGoogle
+	// Intentos de clave por correo (login) y por alumno (cambio de clave), para
+	// que no se pueda adivinar una clave probando muchas
+	intentos *middleware.RateLimiterMemoryStore
 }
 
 func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.CarreraRepository, logger *zap.Logger, jwtSecret config.Secret, googleClientID string) *AlumnoHandler {
@@ -33,7 +38,19 @@ func NewAlumnoHandler(alumnoRepo domain.AlumnoRepository, carreraRepo domain.Car
 		jwtToken:       jwtSecret,
 		googleClientID: googleClientID,
 		validarGoogle:  validarTokenGoogle,
+		intentos: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Limit(5.0 / 60), // 5 por minuto
+			Burst:     10,
+			ExpiresIn: 15 * time.Minute,
+		}),
 	}
+}
+
+var demasiadosIntentos = NewApiError(http.StatusTooManyRequests, fmt.Errorf("Demasiados intentos. Esperá unos minutos y probá de nuevo."))
+
+func (h *AlumnoHandler) puedeIntentar(clave string) bool {
+	ok, _ := h.intentos.Allow(clave)
+	return ok
 }
 
 // GetMe devuelve el perfil del alumno autenticado.
@@ -121,6 +138,11 @@ func (h *AlumnoHandler) LogIn(c echo.Context) error {
 		return credencialesInvalidas
 	}
 
+	if !h.puedeIntentar("login:" + email.String()) {
+		h.logger.Warn("LogIn: demasiados intentos para un correo")
+		return demasiadosIntentos
+	}
+
 	alumno, err := h.alumnoRepo.GetByEmail(ctx, email.String())
 	if err != nil || alumno == nil {
 		h.logger.Warn("LogIn: intento de login fallido, el correo no existe")
@@ -175,7 +197,7 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 
 	jwtSecret := h.jwtToken.Expose()
 
-	claims, err := ParseToken(refreshTokenCookie.Value, jwtSecret)
+	claims, err := ParseRefreshToken(refreshTokenCookie.Value, jwtSecret)
 	if err != nil {
 		h.setRefreshCookie(c, "", time.Unix(0, 0))
 		return NewApiError(http.StatusUnauthorized, fmt.Errorf("Refresh Token inválido o expirado. Por favor, inicie sesión de nuevo."))
@@ -253,6 +275,10 @@ func (h *AlumnoHandler) CambiarPassword(c echo.Context) error {
 	}
 	if err := c.Bind(&req); err != nil {
 		return InvalidJSON()
+	}
+
+	if !h.puedeIntentar(fmt.Sprintf("clave:%d", id)) {
+		return demasiadosIntentos
 	}
 
 	alumno, err := h.alumnoRepo.GetByID(ctx, id)
