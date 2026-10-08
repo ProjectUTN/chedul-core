@@ -69,6 +69,7 @@ type claseRow struct {
 	MateriaID     sql.NullInt64  `bun:"materia_id"`
 	MateriaNombre sql.NullString `bun:"materia_nombre"`
 	ComisionID    sql.NullInt64  `bun:"comision_id"`
+	Cuatrimestre  sql.NullString `bun:"cuatrimestre"`
 }
 
 func (row claseRow) toDomain() domain.Clase {
@@ -76,15 +77,20 @@ func (row claseRow) toDomain() domain.Clase {
 	if row.ComisionID.Valid {
 		comisionID = &row.ComisionID.Int64
 	}
+	var cuatrimestre *string
+	if row.Cuatrimestre.Valid {
+		cuatrimestre = &row.Cuatrimestre.String
+	}
 	return domain.Clase{
-		ComisionID: comisionID,
-		ID:         row.ID,
-		Titulo:     row.Titulo,
-		Dia:        row.Dia,
-		HoraInicio: row.HoraInicio,
-		HoraFin:    row.HoraFin,
-		Aula:       row.Aula,
-		Materia:    materiaResumen(row.MateriaID, row.MateriaNombre),
+		ComisionID:   comisionID,
+		Cuatrimestre: cuatrimestre,
+		ID:           row.ID,
+		Titulo:       row.Titulo,
+		Dia:          row.Dia,
+		HoraInicio:   row.HoraInicio,
+		HoraFin:      row.HoraFin,
+		Aula:         row.Aula,
+		Materia:      materiaResumen(row.MateriaID, row.MateriaNombre),
 	}
 }
 
@@ -123,7 +129,9 @@ func (r *calendarioRepository) selectClases(alumnoID int64) *bun.SelectQuery {
 		ColumnExpr("to_char(c.hora_inicio, 'HH24:MI') AS hora_inicio").
 		ColumnExpr("to_char(c.hora_fin, 'HH24:MI') AS hora_fin").
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
+		ColumnExpr("co.cuatrimestre").
 		Join("LEFT JOIN materia AS m ON m.id = c.materia_id").
+		Join("LEFT JOIN comision AS co ON co.id = c.comision_id").
 		Where("c.alumno_id = ?", alumnoID)
 }
 

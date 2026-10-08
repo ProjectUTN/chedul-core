@@ -139,6 +139,8 @@ type Clase struct {
 	Materia    *MateriaResumen `json:"materia"`
 	// Comision de la que se cargo la clase; nil si se cargo a mano
 	ComisionID *int64 `json:"comision_id"`
+	// Cuatrimestre de esa comision (1C, 2C); nil si se cargo a mano
+	Cuatrimestre *string `json:"cuatrimestre"`
 }
 
 type DatosClase struct {
