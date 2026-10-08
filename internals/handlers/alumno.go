@@ -249,7 +249,7 @@ func (h *AlumnoHandler) RefreshToken(c echo.Context) error {
 	})
 }
 
-// UpdateMe actualiza el nombre y la carrera del alumno autenticado.
+// UpdateMe actualiza el nombre, el apellido y la carrera del alumno autenticado.
 func (h *AlumnoHandler) UpdateMe(c echo.Context) error {
 	ctx := c.Request().Context()
 
@@ -278,6 +278,9 @@ func (h *AlumnoHandler) UpdateMe(c echo.Context) error {
 	}
 
 	alumno.Nombre = nombre
+	if req.Apellido != nil {
+		alumno.Apellido, _ = domain.ParseApellido(*req.Apellido)
+	}
 	alumno.Carrera = req.CarreraID
 
 	if err := h.alumnoRepo.Update(ctx, alumno); err != nil {

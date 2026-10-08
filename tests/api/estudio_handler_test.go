@@ -174,6 +174,81 @@ func (s *EstudioHandlerSuite) TestRequiereSesion() {
 	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/estudio/ranking", nil).Status)
 }
 
+func (s *EstudioHandlerSuite) TestTemporizadorSigueEntreDispositivos() {
+	celu := NewClient(s.T(), s.app)
+	celu.Registrar("Tomi Paz", "tomi.timer@chedul.com")
+	// Mismo alumno desde otro dispositivo
+	compu := NewClient(s.T(), s.app)
+	compu.AccessToken = celu.AccessToken
+
+	type respuesta struct {
+		Estado *struct {
+			Fase      string `json:"fase"`
+			Acumulado int64  `json:"acumulado"`
+			Desde     *int64 `json:"desde"`
+		} `json:"estado"`
+		Rev   int   `json:"rev"`
+		Ahora int64 `json:"ahora"`
+	}
+	leer := func(c *Client) respuesta {
+		resp := c.JSON("GET", "/estudio/temporizador", nil)
+		s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+		var r respuesta
+		resp.JSON(s.T(), &r)
+		return r
+	}
+	guardar := func(c *Client, rev int, fase string, acumulado int64) (int, respuesta) {
+		resp := c.JSON("PUT", "/estudio/temporizador", map[string]any{
+			"rev": rev,
+			"estado": map[string]any{
+				"modo": "pomodoro", "fase": fase, "foco": 25, "descanso": 5,
+				"materia_id": 0, "acumulado": acumulado, "desde": nil,
+			},
+		})
+		var r respuesta
+		if resp.Status == http.StatusOK || resp.Status == http.StatusConflict {
+			resp.JSON(s.T(), &r)
+		}
+		return resp.Status, r
+	}
+
+	vacio := leer(celu)
+	s.Nil(vacio.Estado)
+	s.NotZero(vacio.Ahora)
+
+	status, r := guardar(celu, 0, "foco", 60_000)
+	s.Equal(http.StatusOK, status)
+	s.Equal(1, r.Rev)
+
+	// El otro dispositivo ve lo mismo
+	visto := leer(compu)
+	s.Require().NotNil(visto.Estado)
+	s.Equal(int64(60_000), visto.Estado.Acumulado)
+
+	// Los dos intentan cerrar el mismo foco: gana el primero, el otro recibe
+	// lo guardado y no escribe
+	status, r = guardar(celu, 1, "descanso", 0)
+	s.Equal(http.StatusOK, status)
+	s.Equal(2, r.Rev)
+	status, r = guardar(compu, 1, "descanso", 0)
+	s.Equal(http.StatusConflict, status)
+	s.Equal(2, r.Rev)
+	s.Require().NotNil(r.Estado)
+	s.Equal("descanso", r.Estado.Fase)
+
+	// Un estado invalido se rechaza
+	resp := celu.JSON("PUT", "/estudio/temporizador", map[string]any{
+		"rev":    2,
+		"estado": map[string]any{"modo": "raro", "fase": "foco", "foco": 25, "descanso": 5, "acumulado": 0},
+	})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+
+	// Otro alumno no ve el cronometro ajeno
+	otro := NewClient(s.T(), s.app)
+	otro.Registrar("Otro", "otro.timer@chedul.com")
+	s.Nil(leer(otro).Estado)
+}
+
 func TestEstudioSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip("too slow for testing.Short")

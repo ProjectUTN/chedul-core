@@ -20,6 +20,9 @@ type DatosGoogle struct {
 	Email           string
 	EmailVerificado bool
 	Nombre          string
+	// given_name y family_name, si Google los manda
+	NombrePila string
+	Apellido   string
 }
 
 // ValidadorGoogle verifica el ID token que devuelve el boton de Google.
@@ -34,6 +37,8 @@ func validarTokenGoogle(ctx context.Context, token, clientID string) (*DatosGoog
 	datos.Email, _ = payload.Claims["email"].(string)
 	datos.EmailVerificado, _ = payload.Claims["email_verified"].(bool)
 	datos.Nombre, _ = payload.Claims["name"].(string)
+	datos.NombrePila, _ = payload.Claims["given_name"].(string)
+	datos.Apellido, _ = payload.Claims["family_name"].(string)
 	return datos, nil
 }
 
@@ -83,7 +88,7 @@ func (h *AlumnoHandler) LogInGoogle(c echo.Context) error {
 
 	alumno, _ := h.alumnoRepo.GetByEmail(ctx, email.String())
 	if alumno == nil {
-		alumno, err = h.crearAlumnoGoogle(ctx, email, datos.Nombre)
+		alumno, err = h.crearAlumnoGoogle(ctx, email, datos)
 		if err != nil {
 			return err
 		}
@@ -114,9 +119,16 @@ func (h *AlumnoHandler) LogInGoogle(c echo.Context) error {
 	return h.iniciarSesion(c, alumno, "google")
 }
 
-func (h *AlumnoHandler) crearAlumnoGoogle(ctx context.Context, email domain.Email, nombreGoogle string) (*domain.Alumno, error) {
+func (h *AlumnoHandler) crearAlumnoGoogle(ctx context.Context, email domain.Email, datos *DatosGoogle) (*domain.Alumno, error) {
+	// Con nombre y apellido separados se guardan asi; si no, todo va en el nombre
+	nombreGoogle, apellidoGoogle := datos.Nombre, ""
+	if datos.NombrePila != "" && datos.Apellido != "" {
+		nombreGoogle, apellidoGoogle = datos.NombrePila, datos.Apellido
+	}
+	apellido, _ := domain.ParseApellido(apellidoGoogle)
 	nombre, err := domain.NewUsername(nombreGoogle)
 	if err != nil {
+		apellido = ""
 		nombre, err = domain.NewUsername(strings.Split(email.String(), "@")[0])
 		if err != nil {
 			return nil, err
@@ -138,6 +150,7 @@ func (h *AlumnoHandler) crearAlumnoGoogle(ctx context.Context, email domain.Emai
 
 	alumno := &domain.Alumno{
 		Nombre:   nombre,
+		Apellido: apellido,
 		Email:    email,
 		Carrera:  carreras[0].ID,
 		Password: clave,

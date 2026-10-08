@@ -12,6 +12,7 @@ type AlumnoModel struct {
 	bun.BaseModel `bun:"table:alumno"`
 	ID            int64  `json:"id" bun:"id,pk,autoincrement"`
 	Nombre        string `json:"nombre" bun:"nombre,notnull"`
+	Apellido      string `json:"apellido" bun:"apellido,notnull"`
 	Email         string `json:"email" bun:"email,unique"`
 	Carrera       int64  `json:"carrera" bun:"carrera_id,notnull"`
 	Password      string `json:"-" bun:"password"`
@@ -37,10 +38,11 @@ func (r *alumnoRepository) toDomain(model AlumnoModel) (domain.Alumno, error) {
 	}
 
 	return domain.Alumno{
-		ID:      model.ID,
-		Nombre:  userName,
-		Email:   email,
-		Carrera: model.Carrera,
+		ID:       model.ID,
+		Nombre:   userName,
+		Apellido: model.Apellido,
+		Email:    email,
+		Carrera:  model.Carrera,
 		// TODO: Todavia no se si es peligroso asumir que la clave en la base
 		// de datos ya esta encriptada
 		Password:        domain.ParsePasswordFromEncrypted(model.Password),
@@ -53,6 +55,7 @@ func (r *alumnoRepository) toModel(alumno domain.Alumno) AlumnoModel {
 	return AlumnoModel{
 		ID:       alumno.ID,
 		Nombre:   alumno.Nombre.String(),
+		Apellido: alumno.Apellido,
 		Email:    alumno.Email.String(),
 		Carrera:  alumno.Carrera,
 		Password: alumno.Password.String(),
@@ -107,7 +110,7 @@ func (r *alumnoRepository) Update(ctx context.Context, alumno *domain.Alumno) er
 	model := r.toModel(*alumno)
 	_, err := r.db.NewUpdate().
 		Model(&model).
-		Column("nombre", "email", "carrera_id", "password").
+		Column("nombre", "apellido", "email", "carrera_id", "password").
 		Where("id = ?", alumno.ID).
 		Exec(ctx)
 	return err

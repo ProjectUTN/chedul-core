@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -209,19 +208,6 @@ type RankingResponse struct {
 	Puestos       []domain.PuestoRanking `json:"puestos"`
 }
 
-// nombreCorto muestra el nombre de pila y la inicial del apellido: "Juan P."
-func nombreCorto(nombre string) string {
-	partes := strings.Fields(nombre)
-	if len(partes) == 0 {
-		return "Anónimo"
-	}
-	if len(partes) == 1 {
-		return partes[0]
-	}
-	inicial := []rune(partes[len(partes)-1])[0]
-	return partes[0] + " " + strings.ToUpper(string(inicial)) + "."
-}
-
 // ArmarRanking numera a los participantes (los empatados comparten puesto) y
 // deja los primeros, mas el alumno si quedo mas abajo.
 func ArmarRanking(filas []domain.FilaRanking, alumnoID int64, limite int) []domain.PuestoRanking {
@@ -237,7 +223,7 @@ func ArmarRanking(filas []domain.FilaRanking, alumnoID int64, limite int) []doma
 		}
 		puestos = append(puestos, domain.PuestoRanking{
 			Posicion: posicion,
-			Nombre:   nombreCorto(f.Nombre),
+			Nombre:   domain.NombreCorto(f.Nombre, f.Apellido),
 			Minutos:  f.Minutos,
 			SoyYo:    soyYo,
 		})
@@ -412,4 +398,62 @@ func (h *EstudioHandler) DeleteTarea(c echo.Context) error {
 		return err
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// respuestaTemporizador lleva la hora del servidor para que cada dispositivo
+// corrija su reloj: los tiempos del cronometro son hora del servidor.
+type respuestaTemporizador struct {
+	Estado *domain.EstadoTemporizador `json:"estado"`
+	Rev    int                        `json:"rev"`
+	Ahora  int64                      `json:"ahora"`
+}
+
+func (h *EstudioHandler) respuestaTemporizador(t *domain.Temporizador) respuestaTemporizador {
+	r := respuestaTemporizador{Ahora: h.ahora().UnixMilli()}
+	if t != nil {
+		r.Estado = &t.Estado
+		r.Rev = t.Rev
+	}
+	return r
+}
+
+// GetTemporizador devuelve el cronometro en curso, para retomarlo desde
+// cualquier dispositivo.
+func (h *EstudioHandler) GetTemporizador(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	t, err := h.repo.GetTemporizador(c.Request().Context(), alumnoID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, h.respuestaTemporizador(t))
+}
+
+// SetTemporizador guarda el cronometro. Si otro dispositivo lo cambio antes
+// (rev distinta) responde 409 con lo que hay guardado, y no escribe nada.
+func (h *EstudioHandler) SetTemporizador(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	var datos struct {
+		Estado domain.EstadoTemporizador `json:"estado"`
+		Rev    int                       `json:"rev"`
+	}
+	if err := c.Bind(&datos); err != nil {
+		return InvalidJSON()
+	}
+	if errs := datos.Estado.Validate(); len(errs) > 0 {
+		return InvalidRequestData(errs)
+	}
+	t, guardado, err := h.repo.GuardarTemporizador(c.Request().Context(), alumnoID, datos.Estado, datos.Rev)
+	if err != nil {
+		return err
+	}
+	if !guardado {
+		return c.JSON(http.StatusConflict, h.respuestaTemporizador(t))
+	}
+	return c.JSON(http.StatusOK, h.respuestaTemporizador(t))
 }
