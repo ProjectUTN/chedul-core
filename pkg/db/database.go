@@ -49,7 +49,10 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 
-	if err := goose.Up(db.DB, "."); err != nil {
+	// WithAllowMissing aplica tambien las migraciones con fecha anterior a la
+	// ultima aplicada: pasa cuando dos ramas se mergean en otro orden que el
+	// de sus fechas, y sin esto la API no arranca.
+	if err := goose.Up(db.DB, ".", goose.WithAllowMissing()); err != nil {
 		return fmt.Errorf("error aplicando migraciones: %w", err)
 	}
 
