@@ -211,6 +211,9 @@ func (s *Server) SetupRoutes() {
 
 	api.GET("/condicion", condicionHandler.GetAll)
 
+	// Link de calendario (.ics): lo identifica el token, no la sesion
+	api.GET("/calendario/ics/:archivo", calendarioHandler.ExportarICS)
+
 	// Rutas que requieren iniciar sesion
 	protectedAPI := api.Group("")
 	protectedAPI.Use(RequireAuthMiddleware(s.JwtSecret.Expose(), s.Logger))
@@ -245,6 +248,8 @@ func (s *Server) SetupRoutes() {
 	eventos.DELETE("/:id", calendarioHandler.DeleteEvento)
 
 	protectedAPI.GET("/calendario-academico", calendarioHandler.ListFechasAcademicas)
+	protectedAPI.GET("/calendario/suscripcion", calendarioHandler.GetSuscripcion)
+	protectedAPI.POST("/calendario/suscripcion/renovar", calendarioHandler.RenovarSuscripcion)
 
 	estudio := protectedAPI.Group("/estudio")
 	estudio.GET("/sesiones", estudioHandler.ListSesiones)

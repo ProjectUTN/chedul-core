@@ -13,6 +13,8 @@ import (
 var (
 	ErrEventoNoEncontrado = errors.New("evento no encontrado")
 	ErrClaseNoEncontrada  = errors.New("clase no encontrada")
+	// El token del link de calendario no es de ningun alumno
+	ErrCalendarioNoEncontrado = errors.New("calendario no encontrado")
 )
 
 const (
@@ -249,4 +251,10 @@ type CalendarioRepository interface {
 	CreateClase(ctx context.Context, alumnoID int64, datos DatosClase) (int64, error)
 	UpdateClase(ctx context.Context, alumnoID, id int64, datos DatosClase) error
 	DeleteClase(ctx context.Context, alumnoID, id int64) error
+
+	// CalendarioToken devuelve el token del link de calendario del alumno, o
+	// "" si todavia no tiene.
+	CalendarioToken(ctx context.Context, alumnoID int64) (string, error)
+	SetCalendarioToken(ctx context.Context, alumnoID int64, token string) error
+	AlumnoDelCalendario(ctx context.Context, token string) (int64, error)
 }
