@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+const (
+	NotaAprobadaMin = 6
+	NotaMax         = 10
+)
+
 type CondicionAlumno struct {
 	ID          int64 `json:"id"`
 	CondicionID int64 `json:"condicion_id"`
@@ -25,8 +30,9 @@ func (r *SetCondicionRequest) Validate() map[string]string {
 		errors["condicion_id"] = "Condición es requerida"
 	}
 
-	if r.Nota != nil && (*r.Nota < 1 || *r.Nota > 10) {
-		errors["nota"] = fmt.Sprintf("La nota debe estar entre 1 y 10, se recibió %d", *r.Nota)
+	// En la UTN se aprueba con 6 o mas
+	if r.Nota != nil && (*r.Nota < NotaAprobadaMin || *r.Nota > NotaMax) {
+		errors["nota"] = fmt.Sprintf("La nota de una aprobada va de 6 a 10, se recibió %d", *r.Nota)
 	}
 
 	return errors

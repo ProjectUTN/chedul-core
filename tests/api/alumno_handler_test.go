@@ -162,8 +162,10 @@ func (s *AlumnoHandlerSuite) TestCondicionYProgreso() {
 	resp = c.JSON("DELETE", ruta("/condicion_alumno/%d", ayga), nil)
 	s.Equal(http.StatusNoContent, resp.Status)
 
-	resp = c.JSON("PUT", ruta("/condicion_alumno/%d", am1), map[string]any{"condicion_id": aprobada, "nota": 11})
-	s.Equal(http.StatusUnprocessableEntity, resp.Status)
+	for _, nota := range []int{5, 11} {
+		resp = c.JSON("PUT", ruta("/condicion_alumno/%d", am1), map[string]any{"condicion_id": aprobada, "nota": nota})
+		s.Equal(http.StatusUnprocessableEntity, resp.Status, "nota %d", nota)
+	}
 
 	resp = c.JSON("PUT", "/condicion_alumno/99999", map[string]any{"condicion_id": aprobada})
 	s.Equal(http.StatusNotFound, resp.Status)
