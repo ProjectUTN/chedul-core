@@ -19,11 +19,11 @@ func TestCalcularOrdenanza531(t *testing.T) {
 		return domain.CondicionPorAlumno{MateriaID: id, Condicion: "Aprobada"}
 	}
 
-	// Le faltan todas: 312 hs contra 216 del ultimo nivel
+	// Le faltan todas: 16 hs semanales contra 12 del ultimo nivel
 	r := CalcularOrdenanza531(materias, map[int64]domain.CondicionPorAlumno{})
 	assert.False(t, r.Puede)
-	assert.Equal(t, 216.0, r.HorasLimite)
-	assert.Equal(t, 312.0, r.HorasFaltantes)
+	assert.Equal(t, 12.0, r.HorasLimite)
+	assert.Equal(t, 16.0, r.HorasFaltantes)
 
 	// Con Sistemas Operativos aprobada le falta justo el ultimo nivel; la
 	// electiva y la practica supervisada no cuentan
@@ -32,7 +32,7 @@ func TestCalcularOrdenanza531(t *testing.T) {
 		3: {MateriaID: 3, Condicion: "Regularizada"},
 	})
 	assert.True(t, r.Puede)
-	assert.Equal(t, 216.0, r.HorasFaltantes)
+	assert.Equal(t, 12.0, r.HorasFaltantes)
 	assert.Len(t, r.Faltantes, 2)
 	assert.Equal(t, "Pendiente", r.Faltantes[0].EstadoActual)
 	assert.Equal(t, "Regularizada", r.Faltantes[1].EstadoActual)

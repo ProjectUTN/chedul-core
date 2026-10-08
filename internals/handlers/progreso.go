@@ -58,8 +58,9 @@ type ProgresoResponse struct {
 
 // Ordenanza531 dice si el alumno puede pedir la excepcion de correlativas del
 // punto 5.3.1 del Reglamento de Estudios (Ord. 1549, modificada por la 1872):
-// si las materias que le faltan aprobar no superan la carga horaria del ultimo
-// nivel, las cursa sin correlativas (para rendir el final si se piden).
+// si la carga horaria semanal de las materias que le faltan aprobar no supera
+// la del ultimo nivel, las cursa sin correlativas (para rendir el final si se
+// piden). Se cuentan horas semanales (carga_horaria), no las horas totales.
 // Las electivas y las que no tienen cursado (la Practica Supervisada) no se
 // cuentan, porque no se sabe cuales va a elegir el alumno.
 type Ordenanza531 struct {
@@ -96,13 +97,13 @@ func CalcularOrdenanza531(materias []domain.Materia, estados map[int64]domain.Co
 			continue
 		}
 		if m.Nivel == ultimoNivel {
-			resp.HorasLimite += m.Horas
+			resp.HorasLimite += float64(m.CargaHoraria)
 		}
 		estado := estados[m.ID]
 		if estado.Condicion == condicionAprobada {
 			continue
 		}
-		resp.HorasFaltantes += m.Horas
+		resp.HorasFaltantes += float64(m.CargaHoraria)
 		condicion := estado.Condicion
 		if condicion == "" {
 			condicion = condicionPendiente
