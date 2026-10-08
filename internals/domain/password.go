@@ -3,7 +3,6 @@ package domain
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"crypto/rand"
 	"crypto/subtle"
@@ -24,20 +23,17 @@ type Password struct {
 	inner string
 }
 
+// MinimoPassword es el unico requisito de la clave ademas del largo maximo:
+// sin reglas de mayusculas, numeros o simbolos (lo pidio Eduardo).
+const MinimoPassword = 6
+
 func ParsePassword(s string) (Password, error) {
-	if strings.ContainsAny(s, " \t\n\r") {
-		return Password{}, fmt.Errorf("La clave no debe tener espacios vacios")
-	}
-	if len(s) < 8 {
-		return Password{}, fmt.Errorf("La clave debe tener minimo 8 caracteres")
+	if len(s) < MinimoPassword {
+		return Password{}, fmt.Errorf("La clave debe tener al menos %d caracteres", MinimoPassword)
 	}
 
 	if len(s) > 128 {
 		return Password{}, fmt.Errorf("la clave no puede exceder 128 caracteres")
-	}
-
-	if !hasCharacterDiversity(s) {
-		return Password{}, fmt.Errorf("la clave debe contener al menos 3 de los siguientes tipos: mayúsculas, minúsculas, números y símbolos")
 	}
 
 	password, err := hash(s)
@@ -59,39 +55,6 @@ func ParsePasswordFromEncrypted(s string) Password {
 
 func (p *Password) String() string {
 	return p.inner
-}
-
-func hasCharacterDiversity(password string) bool {
-	var hasUpper, hasLower, hasDigit, hasSymbol bool
-	count := 0
-
-	for _, char := range password {
-		switch {
-		case unicode.IsUpper(char):
-			hasUpper = true
-		case unicode.IsLower(char):
-			hasLower = true
-		case unicode.IsDigit(char):
-			hasDigit = true
-		case unicode.IsPunct(char) || unicode.IsSymbol(char):
-			hasSymbol = true
-		}
-	}
-
-	if hasUpper {
-		count++
-	}
-	if hasLower {
-		count++
-	}
-	if hasDigit {
-		count++
-	}
-	if hasSymbol {
-		count++
-	}
-
-	return count >= 3
 }
 
 func hash(s string) (string, error) {
