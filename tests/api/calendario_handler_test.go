@@ -59,7 +59,7 @@ func (s *CalendarioHandlerSuite) eventos(c *Client, desde, hasta string) []event
 
 func (s *CalendarioHandlerSuite) TestEventos() {
 	c := NewClient(s.T(), s.app)
-	c.Registrar("Facu", "facu.academico@chedul.com")
+	c.Registrar("Ana", "ana.calendario@chedul.com")
 	am1 := c.MateriaID("isi-am1")
 
 	resp := c.JSON("POST", "/eventos", map[string]any{
