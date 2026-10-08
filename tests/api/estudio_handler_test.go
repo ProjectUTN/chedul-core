@@ -1,0 +1,179 @@
+package api
+
+import (
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/suite"
+)
+
+type sesionTest struct {
+	ID      int64  `json:"id"`
+	Modo    string `json:"modo"`
+	Minutos int    `json:"minutos"`
+	Fin     string `json:"fin"`
+	Materia *struct {
+		ID     int64  `json:"id"`
+		Nombre string `json:"nombre"`
+	} `json:"materia"`
+}
+
+type rankingTest struct {
+	Participo     bool `json:"participo"`
+	Participantes int  `json:"participantes"`
+	Puestos       []struct {
+		Posicion int    `json:"posicion"`
+		Nombre   string `json:"nombre"`
+		Minutos  int    `json:"minutos"`
+		SoyYo    bool   `json:"soy_yo"`
+	} `json:"puestos"`
+}
+
+type EstudioHandlerSuite struct {
+	suite.Suite
+	app *TestApp
+}
+
+func (s *EstudioHandlerSuite) SetupSuite() {
+	app, err := CreateTestApp()
+	s.Require().NoError(err)
+	s.app = app
+}
+
+func (s *EstudioHandlerSuite) TearDownSuite() {
+	s.app.Cleanup()
+}
+
+func (s *EstudioHandlerSuite) TestSesionesYResumen() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Gabi Sosa", "gabi.estudio@chedul.com")
+	aed := c.MateriaID("isi-aed")
+
+	nueva := func(payload map[string]any) sesionTest {
+		resp := c.JSON("POST", "/estudio/sesiones", payload)
+		s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+		var sesion sesionTest
+		resp.JSON(s.T(), &sesion)
+		return sesion
+	}
+
+	pomodoro := nueva(map[string]any{"modo": "pomodoro", "minutos": 25, "materia_id": aed})
+	s.Equal(25, pomodoro.Minutos)
+	s.Require().NotNil(pomodoro.Materia)
+	s.Equal(aed, pomodoro.Materia.ID)
+	s.NotEmpty(pomodoro.Fin)
+	libre := nueva(map[string]any{"modo": "libre", "minutos": 50})
+	s.Nil(libre.Materia)
+
+	for _, payload := range []map[string]any{
+		{"modo": "siesta", "minutos": 25},
+		{"modo": "libre", "minutos": 0},
+		{"modo": "libre", "minutos": 721},
+		{"modo": "libre", "minutos": 10, "materia_id": 999999},
+	} {
+		resp := c.JSON("POST", "/estudio/sesiones", payload)
+		s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+	}
+
+	resp := c.JSON("GET", "/estudio/resumen", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var resumen struct {
+		HoyMinutos    int `json:"hoy_minutos"`
+		SemanaMinutos int `json:"semana_minutos"`
+		RachaDias     int `json:"racha_dias"`
+		PorDia        []struct {
+			Fecha   string `json:"fecha"`
+			Minutos int    `json:"minutos"`
+		} `json:"por_dia"`
+		PorMateria []struct {
+			MateriaID *int64 `json:"materia_id"`
+			Minutos   int    `json:"minutos"`
+		} `json:"por_materia"`
+	}
+	resp.JSON(s.T(), &resumen)
+	s.Equal(75, resumen.HoyMinutos)
+	s.Equal(75, resumen.SemanaMinutos)
+	s.Equal(1, resumen.RachaDias)
+	s.Len(resumen.PorDia, 28)
+	s.Equal(75, resumen.PorDia[27].Minutos)
+	s.Require().Len(resumen.PorMateria, 2)
+	s.Nil(resumen.PorMateria[0].MateriaID)
+	s.Equal(50, resumen.PorMateria[0].Minutos)
+
+	// Otro alumno no ve ni borra las sesiones ajenas
+	otro := NewClient(s.T(), s.app)
+	otro.Registrar("Hugo", "hugo.estudio@chedul.com")
+	s.Equal(http.StatusNotFound, otro.JSON("DELETE", ruta("/estudio/sesiones/%d", libre.ID), nil).Status)
+	resp = otro.JSON("GET", "/estudio/sesiones", nil)
+	var ajenas []sesionTest
+	resp.JSON(s.T(), &ajenas)
+	s.Empty(ajenas)
+
+	s.Equal(http.StatusNoContent, c.JSON("DELETE", ruta("/estudio/sesiones/%d", libre.ID), nil).Status)
+	resp = c.JSON("GET", "/estudio/sesiones", nil)
+	var mias []sesionTest
+	resp.JSON(s.T(), &mias)
+	s.Require().Len(mias, 1)
+	s.Equal(pomodoro.ID, mias[0].ID)
+}
+
+func (s *EstudioHandlerSuite) TestRankingSoloConQuienParticipa() {
+	ivan := NewClient(s.T(), s.app)
+	ivan.Registrar("Iván Pérez", "ivan.estudio@chedul.com")
+	juli := NewClient(s.T(), s.app)
+	juli.Registrar("Juli Gómez", "juli.estudio@chedul.com")
+	s.Require().Equal(http.StatusCreated, ivan.JSON("POST", "/estudio/sesiones", map[string]any{"modo": "libre", "minutos": 90}).Status)
+	s.Require().Equal(http.StatusCreated, juli.JSON("POST", "/estudio/sesiones", map[string]any{"modo": "libre", "minutos": 40}).Status)
+
+	ranking := func(c *Client, metodo string, payload any) rankingTest {
+		resp := c.JSON(metodo, "/estudio/ranking", payload)
+		s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+		var r rankingTest
+		resp.JSON(s.T(), &r)
+		return r
+	}
+
+	// Nadie se sumo todavia
+	r := ranking(ivan, "GET", nil)
+	s.False(r.Participo)
+	s.Empty(r.Puestos)
+
+	r = ranking(ivan, "PUT", map[string]any{"participar": true})
+	s.True(r.Participo)
+	s.Require().Len(r.Puestos, 1)
+	s.Equal("Iván P.", r.Puestos[0].Nombre)
+	s.Equal(90, r.Puestos[0].Minutos)
+	s.True(r.Puestos[0].SoyYo)
+
+	// Juli ve a Iván, pero ella no aparece hasta que se suma
+	r = ranking(juli, "GET", nil)
+	s.Require().Len(r.Puestos, 1)
+	s.False(r.Puestos[0].SoyYo)
+
+	r = ranking(juli, "PUT", map[string]any{"participar": true})
+	s.Equal(2, r.Participantes)
+	s.Equal("Juli G.", r.Puestos[1].Nombre)
+	s.Equal(2, r.Puestos[1].Posicion)
+
+	r = ranking(ivan, "PUT", map[string]any{"participar": false})
+	s.False(r.Participo)
+	s.Require().Len(r.Puestos, 1)
+	s.Equal("Juli G.", r.Puestos[0].Nombre)
+
+	resp := ivan.JSON("PUT", "/estudio/ranking", map[string]any{})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+}
+
+func (s *EstudioHandlerSuite) TestRequiereSesion() {
+	c := NewClient(s.T(), s.app)
+	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/estudio/resumen", nil).Status)
+	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/estudio/ranking", nil).Status)
+}
+
+func TestEstudioSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("too slow for testing.Short")
+	}
+
+	suite.Run(t, new(EstudioHandlerSuite))
+}

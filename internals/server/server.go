@@ -178,6 +178,7 @@ func (s *Server) SetupRoutes() {
 	condicionAlumnoRepo := repositories.NewCondicionAlumnoRepository(s.ConnPool)
 	aporteRepo := repositories.NewAporteRepository(s.ConnPool)
 	calendarioRepo := repositories.NewCalendarioRepository(s.ConnPool)
+	estudioRepo := repositories.NewEstudioRepository(s.ConnPool)
 
 	alumnoHandler := handlers.NewAlumnoHandler(alumnoRepo, carreraRepo, s.Logger, s.JwtSecret, s.Config.Google.ClientID)
 	carreraHandler := handlers.NewCarreraHandler(carreraRepo, s.Logger)
@@ -187,6 +188,7 @@ func (s *Server) SetupRoutes() {
 	progresoHandler := handlers.NewProgresoHandler(alumnoRepo, materiaRepo, condicionAlumnoRepo)
 	aporteHandler := handlers.NewAporteHandler(aporteRepo, materiaRepo, s.Storage, s.Config.Uploads.MaxSizeMB, !s.Config.Uploads.Disabled, s.Logger)
 	calendarioHandler := handlers.NewCalendarioHandler(calendarioRepo, materiaRepo, s.Logger)
+	estudioHandler := handlers.NewEstudioHandler(estudioRepo, materiaRepo, s.Logger)
 
 	api := s.Echo.Group("/api/v1")
 
@@ -241,6 +243,14 @@ func (s *Server) SetupRoutes() {
 	eventos.DELETE("/:id", calendarioHandler.DeleteEvento)
 
 	protectedAPI.GET("/calendario-academico", calendarioHandler.ListFechasAcademicas)
+
+	estudio := protectedAPI.Group("/estudio")
+	estudio.GET("/sesiones", estudioHandler.ListSesiones)
+	estudio.POST("/sesiones", estudioHandler.CreateSesion)
+	estudio.DELETE("/sesiones/:id", estudioHandler.DeleteSesion)
+	estudio.GET("/resumen", estudioHandler.Resumen)
+	estudio.GET("/ranking", estudioHandler.Ranking)
+	estudio.PUT("/ranking", estudioHandler.SetParticipacion)
 
 	clases := protectedAPI.Group("/clases")
 	clases.GET("", calendarioHandler.ListClases)
