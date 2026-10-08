@@ -399,3 +399,44 @@ func (h *CalendarioHandler) ExportarICS(c echo.Context) error {
 	c.Response().Header().Set("Cache-Control", "private, max-age=300")
 	return c.Blob(http.StatusOK, "text/calendar; charset=utf-8", []byte(ArmarICS(eventos, clases, academicas, ahora)))
 }
+
+// ListEventosConfirmados devuelve los parciales, entregas y finales que
+// cargaron varios compañeros de la comision y el alumno todavia no tiene.
+func (h *CalendarioHandler) ListEventosConfirmados(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	hoy := time.Now().In(zonaArgentina).Format(domain.FormatoFecha)
+	eventos, err := h.repo.ListEventosConfirmados(c.Request().Context(), alumnoID, hoy, domain.MinimoConfirmaciones)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, eventos)
+}
+
+// DesmentirEvento registra que el alumno dice que un evento confirmado no es
+// asi. Deja de vercelo y, con tantos "no" como confirmaciones, nadie lo ve.
+func (h *CalendarioHandler) DesmentirEvento(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	var datos domain.DatosDesmentido
+	if err := c.Bind(&datos); err != nil {
+		return InvalidJSON()
+	}
+	datos.Tipo = strings.ToLower(strings.TrimSpace(datos.Tipo))
+	datos.Fecha = strings.TrimSpace(datos.Fecha)
+	errs := datos.Validate()
+	if err := h.validarMateria(c, &datos.MateriaID, errs); err != nil {
+		return err
+	}
+	if len(errs) > 0 {
+		return InvalidRequestData(errs)
+	}
+	if err := h.repo.DesmentirEvento(c.Request().Context(), alumnoID, datos); err != nil {
+		return err
+	}
+	return c.NoContent(http.StatusNoContent)
+}

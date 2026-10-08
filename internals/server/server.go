@@ -244,6 +244,8 @@ func (s *Server) SetupRoutes() {
 	eventos := protectedAPI.Group("/eventos")
 	eventos.GET("", calendarioHandler.ListEventos)
 	eventos.POST("", calendarioHandler.CreateEvento)
+	eventos.GET("/confirmados", calendarioHandler.ListEventosConfirmados)
+	eventos.POST("/confirmados/desmentir", calendarioHandler.DesmentirEvento)
 	eventos.PUT("/:id", calendarioHandler.UpdateEvento)
 	eventos.DELETE("/:id", calendarioHandler.DeleteEvento)
 

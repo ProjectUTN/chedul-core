@@ -225,6 +225,50 @@ func (d *DatosClase) Validate() map[string]string {
 	return errs
 }
 
+// MinimoConfirmaciones es cuantos alumnos distintos tienen que cargar el
+// mismo evento para que se le sugiera al resto de la comision.
+const MinimoConfirmaciones = 3
+
+// TiposConfirmables son los eventos que se comparten entre compañeros.
+var TiposConfirmables = []string{"parcial", "entrega", "final"}
+
+// EventoConfirmado es un parcial, entrega o final que cargaron varios
+// alumnos de la misma comision (o con la materia regular, si es un final) y
+// que el alumno todavia no tiene.
+type EventoConfirmado struct {
+	Materia        MateriaResumen `json:"materia"`
+	ComisionID     int64          `json:"comision_id"`
+	Tipo           string         `json:"tipo"`
+	Fecha          string         `json:"fecha"`
+	Hora           *string        `json:"hora"`
+	Confirmaciones int            `json:"confirmaciones"`
+}
+
+// DatosDesmentido identifica un evento confirmado que el alumno dice que no es asi.
+type DatosDesmentido struct {
+	MateriaID  int64  `json:"materia_id"`
+	ComisionID int64  `json:"comision_id"`
+	Tipo       string `json:"tipo"`
+	Fecha      string `json:"fecha"`
+}
+
+func (d *DatosDesmentido) Validate() map[string]string {
+	errs := make(map[string]string)
+	if d.MateriaID <= 0 {
+		errs["materia_id"] = "La materia es requerida"
+	}
+	if d.ComisionID < 0 {
+		errs["comision_id"] = "Comisión inválida"
+	}
+	if !slices.Contains(TiposConfirmables, d.Tipo) {
+		errs["tipo"] = "El tipo tiene que ser parcial, entrega o final"
+	}
+	if _, err := time.Parse(FormatoFecha, d.Fecha); err != nil {
+		errs["fecha"] = "La fecha tiene que tener el formato AAAA-MM-DD"
+	}
+	return errs
+}
+
 // FechaAcademica es una fecha del calendario de la facultad, igual para todos
 // los alumnos: mesas de examen, feriados, inicio y fin de cuatrimestre.
 // Desde y Hasta son AAAA-MM-DD; en las de un solo dia son iguales.
@@ -241,6 +285,10 @@ type CalendarioRepository interface {
 	ListFechasAcademicas(ctx context.Context, desde, hasta string) ([]FechaAcademica, error)
 
 	ListEventos(ctx context.Context, alumnoID int64, desde, hasta string) ([]Evento, error)
+	// ListEventosConfirmados devuelve los eventos desde la fecha que
+	// confirmaron al menos minimo compañeros y el alumno todavia no cargo.
+	ListEventosConfirmados(ctx context.Context, alumnoID int64, desde string, minimo int) ([]EventoConfirmado, error)
+	DesmentirEvento(ctx context.Context, alumnoID int64, datos DatosDesmentido) error
 	GetEvento(ctx context.Context, alumnoID, id int64) (*Evento, error)
 	CreateEvento(ctx context.Context, alumnoID int64, datos DatosEvento) (int64, error)
 	UpdateEvento(ctx context.Context, alumnoID, id int64, datos DatosEvento) error
