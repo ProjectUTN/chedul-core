@@ -297,6 +297,41 @@ func (r *calendarioRepository) DeleteClase(ctx context.Context, alumnoID, id int
 	return filasAfectadas(res, err, domain.ErrClaseNoEncontrada)
 }
 
+func (r *calendarioRepository) CalendarioToken(ctx context.Context, alumnoID int64) (string, error) {
+	var token sql.NullString
+	err := r.db.NewSelect().
+		TableExpr("alumno").
+		ColumnExpr("calendario_token").
+		Where("id = ?", alumnoID).
+		Scan(ctx, &token)
+	return token.String, err
+}
+
+func (r *calendarioRepository) SetCalendarioToken(ctx context.Context, alumnoID int64, token string) error {
+	_, err := r.db.NewUpdate().
+		TableExpr("alumno").
+		Set("calendario_token = ?", token).
+		Where("id = ?", alumnoID).
+		Exec(ctx)
+	return err
+}
+
+func (r *calendarioRepository) AlumnoDelCalendario(ctx context.Context, token string) (int64, error) {
+	var ids []int64
+	err := r.db.NewSelect().
+		TableExpr("alumno").
+		ColumnExpr("id").
+		Where("calendario_token = ?", token).
+		Scan(ctx, &ids)
+	if err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, domain.ErrCalendarioNoEncontrado
+	}
+	return ids[0], nil
+}
+
 // filasAfectadas devuelve noEncontrado si la consulta no toco ninguna fila:
 // el registro no existe o es de otro alumno.
 func filasAfectadas(res sql.Result, err error, noEncontrado error) error {

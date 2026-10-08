@@ -272,3 +272,45 @@ func TestCalendarioSuite(t *testing.T) {
 
 	suite.Run(t, new(CalendarioHandlerSuite))
 }
+
+func (s *CalendarioHandlerSuite) TestLinkDeCalendario() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Ivo Ics", "ivo.ics@chedul.com")
+
+	resp := c.JSON("POST", "/eventos", map[string]any{"titulo": "Parcial de Datos", "tipo": "parcial", "fecha": "2026-11-10", "hora": "18:00"})
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+
+	var sus struct {
+		Token string `json:"token"`
+	}
+	resp = c.JSON("GET", "/calendario/suscripcion", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	resp.JSON(s.T(), &sus)
+	s.Require().NotEmpty(sus.Token)
+
+	// Pedirlo de nuevo devuelve el mismo
+	resp = c.JSON("GET", "/calendario/suscripcion", nil)
+	var otra struct {
+		Token string `json:"token"`
+	}
+	resp.JSON(s.T(), &otra)
+	s.Equal(sus.Token, otra.Token)
+
+	// El .ics se lee sin sesion, con el token
+	anonimo := NewClient(s.T(), s.app)
+	ics := anonimo.Do("GET", "/calendario/ics/"+sus.Token+".ics", nil, "")
+	s.Require().Equal(http.StatusOK, ics.Status, string(ics.Body))
+	s.Contains(ics.Header.Get("Content-Type"), "text/calendar")
+	s.Contains(string(ics.Body), "SUMMARY:Parcial de Datos")
+
+	s.Equal(http.StatusNotFound, anonimo.Do("GET", "/calendario/ics/cualquiera.ics", nil, "").Status)
+	s.Equal(http.StatusUnauthorized, anonimo.JSON("GET", "/calendario/suscripcion", nil).Status)
+
+	// Renovar invalida el link anterior
+	resp = c.JSON("POST", "/calendario/suscripcion/renovar", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	resp.JSON(s.T(), &otra)
+	s.NotEqual(sus.Token, otra.Token)
+	s.Equal(http.StatusNotFound, anonimo.Do("GET", "/calendario/ics/"+sus.Token+".ics", nil, "").Status)
+	s.Equal(http.StatusOK, anonimo.Do("GET", "/calendario/ics/"+otra.Token+".ics", nil, "").Status)
+}

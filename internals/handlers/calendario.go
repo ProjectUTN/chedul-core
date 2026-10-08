@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"chedul-core/internals/domain"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -313,4 +316,86 @@ func (h *CalendarioHandler) DeleteClase(c echo.Context) error {
 		return err
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+type suscripcionCalendario struct {
+	Token string `json:"token"`
+}
+
+func nuevoTokenCalendario() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// GetSuscripcion devuelve el token del link de calendario del alumno y lo
+// crea si todavia no tiene. El frontend arma el link con el.
+func (h *CalendarioHandler) GetSuscripcion(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	token, err := h.repo.CalendarioToken(c.Request().Context(), alumnoID)
+	if err != nil {
+		return err
+	}
+	if token == "" {
+		return h.RenovarSuscripcion(c)
+	}
+	return c.JSON(http.StatusOK, suscripcionCalendario{Token: token})
+}
+
+// RenovarSuscripcion cambia el token: el link anterior deja de andar.
+func (h *CalendarioHandler) RenovarSuscripcion(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	token, err := nuevoTokenCalendario()
+	if err != nil {
+		return err
+	}
+	if err := h.repo.SetCalendarioToken(c.Request().Context(), alumnoID, token); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, suscripcionCalendario{Token: token})
+}
+
+// ExportarICS es la ruta publica que leen Google Calendar y las demas apps.
+// No lleva sesion: el token del link es lo que identifica al alumno.
+func (h *CalendarioHandler) ExportarICS(c echo.Context) error {
+	token := strings.TrimSuffix(c.Param("archivo"), ".ics")
+	if token == "" {
+		return NotFound("Calendario")
+	}
+	ctx := c.Request().Context()
+	alumnoID, err := h.repo.AlumnoDelCalendario(ctx, token)
+	if errors.Is(err, domain.ErrCalendarioNoEncontrado) {
+		return NotFound("Calendario")
+	}
+	if err != nil {
+		return err
+	}
+
+	ahora := time.Now().In(zonaArgentina)
+	formato := domain.FormatoFecha
+	eventos, err := h.repo.ListEventos(ctx, alumnoID, ahora.AddDate(0, -6, 0).Format(formato), ahora.AddDate(1, 0, 0).Format(formato))
+	if err != nil {
+		return err
+	}
+	clases, err := h.repo.ListClases(ctx, alumnoID)
+	if err != nil {
+		return err
+	}
+	inicioAnio := time.Date(ahora.Year(), time.January, 1, 0, 0, 0, 0, zonaArgentina)
+	academicas, err := h.repo.ListFechasAcademicas(ctx, inicioAnio.Format(formato), inicioAnio.AddDate(2, 0, -1).Format(formato))
+	if err != nil {
+		return err
+	}
+
+	c.Response().Header().Set("Content-Disposition", `inline; filename="chedul.ics"`)
+	c.Response().Header().Set("Cache-Control", "private, max-age=300")
+	return c.Blob(http.StatusOK, "text/calendar; charset=utf-8", []byte(ArmarICS(eventos, clases, academicas, ahora)))
 }
