@@ -93,7 +93,7 @@ func queryInt(c echo.Context, name string) (int64, error) {
 }
 
 // List devuelve los aportes paginados. Filtros por query string:
-// materia_id, tag_id, q (texto), mios=1, favoritos=1, orden=recientes|populares,
+// materia_id, carrera=1 (solo los de toda la carrera), tag_id, q (texto), mios=1, favoritos=1, orden=recientes|populares,
 // pagina (desde 1) y limite.
 func (h *AporteHandler) List(c echo.Context) error {
 	ctx := c.Request().Context()
@@ -138,6 +138,9 @@ func (h *AporteHandler) List(c echo.Context) error {
 		Orden:     c.QueryParam("orden"),
 		Limit:     int(limite),
 		Offset:    int((pagina - 1) * limite),
+	}
+	if c.QueryParam("carrera") == "1" {
+		filtro.SoloCarrera = true
 	}
 	if c.QueryParam("mios") == "1" {
 		filtro.AutorID = alumnoID
@@ -190,16 +193,18 @@ func (h *AporteHandler) Get(c echo.Context) error {
 	return c.JSON(http.StatusOK, aporte)
 }
 
-// validarReferencias revisa que la materia y el tipo de aporte existan.
+// validarReferencias revisa que la materia (si hay) y el tipo de aporte existan.
 func (h *AporteHandler) validarReferencias(c echo.Context, datos domain.DatosAporte) error {
 	ctx := c.Request().Context()
 	errs := make(map[string]string)
 
-	if _, err := h.materiaRepo.GetByID(ctx, datos.MateriaID); err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
+	if datos.MateriaID > 0 {
+		if _, err := h.materiaRepo.GetByID(ctx, datos.MateriaID); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			errs["materia_id"] = "La materia no existe"
 		}
-		errs["materia_id"] = "La materia no existe"
 	}
 
 	existe, err := h.repo.TagExiste(ctx, datos.TagID)

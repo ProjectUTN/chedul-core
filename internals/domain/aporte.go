@@ -35,21 +35,22 @@ type ArchivoAporte struct {
 	Tamano int64  `json:"tamano"`
 }
 
-// Aporte es un material compartido por un alumno para una materia: un
-// resumen, un parcial resuelto, un link a un video, etc.
+// Aporte es un material compartido por un alumno para una materia (o para
+// toda la carrera): un resumen, un parcial resuelto, un link a un video, etc.
 type Aporte struct {
-	ID          int64          `json:"id"`
-	Titulo      string         `json:"titulo"`
-	Descripcion string         `json:"descripcion"`
-	Link        *string        `json:"link"`
-	CreadoEn    time.Time      `json:"creado_en"`
-	Materia     AporteMateria  `json:"materia"`
-	Tag         AporteTag      `json:"tag"`
-	Autor       AporteAutor    `json:"autor"`
-	Archivo     *ArchivoAporte `json:"archivo"`
-	Favoritos   int            `json:"favoritos"`
-	EsFavorito  bool           `json:"es_favorito"`
-	EsMio       bool           `json:"es_mio"`
+	ID          int64     `json:"id"`
+	Titulo      string    `json:"titulo"`
+	Descripcion string    `json:"descripcion"`
+	Link        *string   `json:"link"`
+	CreadoEn    time.Time `json:"creado_en"`
+	// nil en los aportes de toda la carrera
+	Materia    *AporteMateria `json:"materia"`
+	Tag        AporteTag      `json:"tag"`
+	Autor      AporteAutor    `json:"autor"`
+	Archivo    *ArchivoAporte `json:"archivo"`
+	Favoritos  int            `json:"favoritos"`
+	EsFavorito bool           `json:"es_favorito"`
+	EsMio      bool           `json:"es_mio"`
 }
 
 const (
@@ -59,8 +60,10 @@ const (
 
 type AporteFiltro struct {
 	// Alumno que hace la consulta, para calcular es_favorito y es_mio
-	ViewerID        int64
-	MateriaID       int64
+	ViewerID  int64
+	MateriaID int64
+	// Solo los de toda la carrera (sin materia)
+	SoloCarrera     bool
 	TagID           int64
 	Texto           string
 	AutorID         int64
@@ -75,8 +78,9 @@ type DatosAporte struct {
 	Titulo      string  `json:"titulo"`
 	Descripcion string  `json:"descripcion"`
 	Link        *string `json:"link"`
-	MateriaID   int64   `json:"materia_id"`
-	TagID       int64   `json:"tag_id"`
+	// 0 es un aporte de toda la carrera
+	MateriaID int64 `json:"materia_id"`
+	TagID     int64 `json:"tag_id"`
 }
 
 const (
@@ -86,6 +90,9 @@ const (
 
 // Normalizar recorta espacios y convierte un link vacio en nil.
 func (d *DatosAporte) Normalizar() {
+	if d.MateriaID < 0 {
+		d.MateriaID = 0
+	}
 	d.Titulo = strings.TrimSpace(d.Titulo)
 	d.Descripcion = strings.TrimSpace(d.Descripcion)
 	if d.Link != nil {
@@ -112,10 +119,6 @@ func (d *DatosAporte) Validate(tieneArchivo bool) map[string]string {
 
 	if uniseg.GraphemeClusterCount(d.Descripcion) > DescripcionMaxLargo {
 		errs["descripcion"] = "La descripción no puede tener más de 2000 caracteres"
-	}
-
-	if d.MateriaID <= 0 {
-		errs["materia_id"] = "La materia es requerida"
 	}
 
 	if d.TagID <= 0 {
