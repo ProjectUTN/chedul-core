@@ -60,12 +60,20 @@ func genValidPasswords() gopter.Gen {
 	})
 }
 
+func TestSimplePasswords(t *testing.T) {
+	for _, clave := range []string{"chedul", "123456", "mi clave de siempre"} {
+		if _, err := ParsePassword(clave); err != nil {
+			t.Errorf("Clave simple %q fue rechazada: %v", clave, err)
+		}
+	}
+}
+
 func TestInvalidPasswords(t *testing.T) {
 	testCases := []struct {
 		name     string
 		password string
 	}{
-		{"password con espacios", "My Secure P@ssw0rd 123"},
+		{"clave muy corta", "abc12"},
 		{"clave de +128 caracteres", strings.Repeat("a", 256)},
 	}
 
