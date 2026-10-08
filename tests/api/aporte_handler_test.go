@@ -304,3 +304,41 @@ func TestAportesSoloLinks(t *testing.T) {
 		t.Fatalf("un link tiene que poder subirse: %d %s", resp.Status, resp.Body)
 	}
 }
+
+func (s *AporteHandlerSuite) TestAporteDeTodaLaCarrera() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Iara", "iara.aportes@chedul.com")
+	otro := strconv.FormatInt(s.tagID(c, "Otro"), 10)
+
+	resp := c.Multipart("POST", "/aportes", map[string]string{
+		"titulo": "Plan de estudios ISI", "tag_id": otro, "link": "https://www.frre.utn.edu.ar/plan",
+	}, nil)
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+	var raw map[string]any
+	resp.JSON(s.T(), &raw)
+	s.Nil(raw["materia"], "sin materia es de toda la carrera")
+
+	materia := strconv.FormatInt(c.MateriaID("isi-aed"), 10)
+	resp = c.Multipart("POST", "/aportes", map[string]string{
+		"titulo": "Resumen AED", "materia_id": materia, "tag_id": otro, "link": "https://a.com/aed",
+	}, nil)
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+
+	s.Equal(2, s.listar(c, "?mios=1").Total)
+	carrera := s.listar(c, "?mios=1&carrera=1")
+	s.Require().Equal(1, carrera.Total)
+	s.Equal("Plan de estudios ISI", carrera.Items[0].Titulo)
+
+	// Se puede pasar a una materia y volver a toda la carrera
+	id := carrera.Items[0].ID
+	resp = c.JSON("PUT", ruta("/aportes/%d", id), map[string]any{
+		"titulo": "Plan de estudios ISI", "tag_id": s.tagID(c, "Otro"), "link": "https://www.frre.utn.edu.ar/plan", "materia_id": c.MateriaID("isi-aed"),
+	})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	s.Equal(0, s.listar(c, "?mios=1&carrera=1").Total)
+	resp = c.JSON("PUT", ruta("/aportes/%d", id), map[string]any{
+		"titulo": "Plan de estudios ISI", "tag_id": s.tagID(c, "Otro"), "link": "https://www.frre.utn.edu.ar/plan", "materia_id": 0,
+	})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	s.Equal(1, s.listar(c, "?mios=1&carrera=1").Total)
+}

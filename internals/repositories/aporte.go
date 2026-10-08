@@ -13,7 +13,7 @@ import (
 type AporteModel struct {
 	bun.BaseModel `bun:"table:aporte"`
 	ID            int64          `bun:"id,pk,autoincrement"`
-	MateriaID     int64          `bun:"materia_id,notnull"`
+	MateriaID     int64          `bun:"materia_id,nullzero"`
 	AlumnoID      int64          `bun:"alumno_id,notnull"`
 	Titulo        string         `bun:"titulo,notnull"`
 	Descripcion   sql.NullString `bun:"descripcion"`
@@ -49,9 +49,9 @@ type aporteRow struct {
 	ArchivoNombre *string        `bun:"archivo_nombre"`
 	ArchivoTipo   *string        `bun:"archivo_tipo"`
 	ArchivoTamano *int64         `bun:"archivo_tamano"`
-	MateriaID     int64          `bun:"materia_id"`
-	MateriaNombre string         `bun:"materia_nombre"`
-	MateriaNivel  int64          `bun:"materia_nivel"`
+	MateriaID     sql.NullInt64  `bun:"materia_id"`
+	MateriaNombre sql.NullString `bun:"materia_nombre"`
+	MateriaNivel  sql.NullInt64  `bun:"materia_nivel"`
 	TagID         int64          `bun:"tag_id"`
 	TagNombre     string         `bun:"tag_nombre"`
 	AutorID       int64          `bun:"autor_id"`
@@ -68,12 +68,15 @@ func (row aporteRow) toDomain(viewerID int64) domain.Aporte {
 		Descripcion: row.Descripcion.String,
 		Link:        row.Link,
 		CreadoEn:    row.CreadoEn,
-		Materia:     domain.AporteMateria{ID: row.MateriaID, Nombre: row.MateriaNombre, Nivel: row.MateriaNivel},
 		Tag:         domain.AporteTag{ID: row.TagID, Nombre: row.TagNombre},
 		Autor:       domain.AporteAutor{ID: row.AutorID, Nombre: row.AutorNombre},
 		Favoritos:   row.Favoritos,
 		EsFavorito:  row.EsFavorito,
 		EsMio:       row.AutorID == viewerID,
+	}
+
+	if row.MateriaID.Valid {
+		aporte.Materia = &domain.AporteMateria{ID: row.MateriaID.Int64, Nombre: row.MateriaNombre.String, Nivel: row.MateriaNivel.Int64}
 	}
 
 	if row.ArchivoKey != nil {
@@ -110,7 +113,7 @@ func (r *aporteRepository) selectAportes(viewerID int64) *bun.SelectQuery {
 		ColumnExpr("al.id AS autor_id, al.nombre AS autor_nombre").
 		ColumnExpr("(SELECT count(*) FROM aportes_favoritos f WHERE f.aporte_id = a.id) AS favoritos").
 		ColumnExpr("EXISTS (SELECT 1 FROM aportes_favoritos f WHERE f.aporte_id = a.id AND f.alumno_id = ?) AS es_favorito", viewerID).
-		Join("JOIN materia AS m ON m.id = a.materia_id").
+		Join("LEFT JOIN materia AS m ON m.id = a.materia_id").
 		Join("JOIN aporte_tag AS t ON t.id = a.tag_id").
 		Join("JOIN alumno AS al ON al.id = a.alumno_id")
 }
@@ -126,6 +129,9 @@ func (r *aporteRepository) List(ctx context.Context, filtro domain.AporteFiltro)
 
 	if filtro.MateriaID > 0 {
 		q = q.Where("a.materia_id = ?", filtro.MateriaID)
+	}
+	if filtro.SoloCarrera {
+		q = q.Where("a.materia_id IS NULL")
 	}
 	if filtro.TagID > 0 {
 		q = q.Where("a.tag_id = ?", filtro.TagID)
@@ -218,7 +224,7 @@ func (r *aporteRepository) Update(ctx context.Context, id int64, datos domain.Da
 		Set("titulo = ?", datos.Titulo).
 		Set("descripcion = ?", sql.NullString{String: datos.Descripcion, Valid: datos.Descripcion != ""}).
 		Set("link = ?", datos.Link).
-		Set("materia_id = ?", datos.MateriaID).
+		Set("materia_id = nullif(?, 0)", datos.MateriaID).
 		Set("tag_id = ?", datos.TagID).
 		Where("id = ?", id).
 		Exec(ctx)
