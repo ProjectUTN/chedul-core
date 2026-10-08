@@ -210,10 +210,38 @@ func (s *CalendarioHandlerSuite) TestHorarioSemanal() {
 	s.Equal(http.StatusNoContent, resp.Status)
 }
 
+func (s *CalendarioHandlerSuite) TestCalendarioAcademico() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Ana", "ana.calendario@chedul.com")
+
+	resp := c.JSON("GET", "/calendario-academico?desde=2026-07-15&hasta=2026-08-12", nil)
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var fechas []struct {
+		Titulo string `json:"titulo"`
+		Tipo   string `json:"tipo"`
+		Desde  string `json:"desde"`
+		Hasta  string `json:"hasta"`
+	}
+	resp.JSON(s.T(), &fechas)
+	s.Require().Len(fechas, 4)
+	// Empezo antes del rango pero sigue adentro, asi que viene
+	s.Equal("Recuperatorios y Fin Primer Cuatrimestre", fechas[0].Titulo)
+	s.Equal("2026-07-13", fechas[0].Desde)
+	s.Equal("2026-07-18", fechas[0].Hasta)
+	s.Equal("receso", fechas[1].Tipo)
+	s.Equal("Exámenes Finales 3° Llamado", fechas[2].Titulo)
+	s.Equal("examen", fechas[2].Tipo)
+	s.Equal("Inicio Segundo Cuatrimestre", fechas[3].Titulo)
+
+	resp = c.JSON("GET", "/calendario-academico?desde=2026-08-12&hasta=2026-08-01", nil)
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+}
+
 func (s *CalendarioHandlerSuite) TestRequiereSesion() {
 	c := NewClient(s.T(), s.app)
 	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/clases", nil).Status)
 	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/eventos?desde=2026-01-01&hasta=2026-01-31", nil).Status)
+	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/calendario-academico?desde=2026-01-01&hasta=2026-01-31", nil).Status)
 }
 
 func TestCalendarioSuite(t *testing.T) {
