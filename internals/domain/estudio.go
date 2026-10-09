@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -44,6 +45,27 @@ type DatosSesion struct {
 	MateriaID *int64 `json:"materia_id"`
 	Modo      string `json:"modo"`
 	Minutos   int    `json:"minutos"`
+	// Cuando empezo de verdad (con pausas incluidas). Opcional: sin esto, o si
+	// no cierra con lo demas, el inicio es el fin menos la duracion.
+	Inicio *time.Time `json:"inicio"`
+}
+
+// InicioMaximo es lo mas atras que puede quedar el inicio de una sesion
+const InicioMaximo = 48 * time.Hour
+
+// DescartarInicioInvalido deja el inicio en nil si no es creible: en el futuro,
+// de hace mas de dos dias o mas cerca del fin que lo que duro la sesion
+// (con pausas el inicio queda mas atras que fin menos duracion, nunca mas
+// adelante).
+func (d *DatosSesion) DescartarInicioInvalido(ahora time.Time) {
+	if d.Inicio == nil {
+		return
+	}
+	transcurrido := ahora.Sub(*d.Inicio)
+	duracion := time.Duration(d.Minutos) * time.Minute
+	if transcurrido < 0 || transcurrido > InicioMaximo || transcurrido < duracion-time.Minute {
+		d.Inicio = nil
+	}
 }
 
 // DatosMateriaSesion es lo unico que se puede cambiar de una sesion ya guardada
@@ -148,6 +170,8 @@ type EstadoTemporizador struct {
 	MateriaID int64  `json:"materia_id"`
 	Acumulado int64  `json:"acumulado"`
 	Desde     *int64 `json:"desde"`
+	// Cuando empezo el bloque que esta en curso (hora del servidor, ms)
+	Inicio *int64 `json:"inicio"`
 }
 
 func (e *EstadoTemporizador) Validate() map[string]string {
@@ -172,6 +196,9 @@ func (e *EstadoTemporizador) Validate() map[string]string {
 	}
 	if e.Desde != nil && *e.Desde <= 0 {
 		errs["desde"] = "La hora de inicio no es válida"
+	}
+	if e.Inicio != nil && *e.Inicio <= 0 {
+		errs["inicio"] = "La hora de inicio no es válida"
 	}
 	return errs
 }
