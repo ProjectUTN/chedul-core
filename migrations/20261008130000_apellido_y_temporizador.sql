@@ -5,9 +5,9 @@
 --   y sirve para que dos dispositivos no pisen el mismo fin de pomodoro.
 -- +goose Up
 -- +goose StatementBegin
-alter table alumno add column apellido text not null default '';
+alter table alumno add column if not exists apellido text not null default '';
 
-create table temporizador(
+create table if not exists temporizador(
     alumno_id int primary key references alumno(id) on delete cascade,
     estado jsonb not null,
     rev int not null default 1,
