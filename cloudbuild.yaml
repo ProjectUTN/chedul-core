@@ -1,0 +1,33 @@
+# Despliegue de la API en Cloud Run desde un trigger de Cloud Build.
+# Existe porque el trigger autogenerado por Cloud Run falla cuando usa una
+# cuenta de servicio propia sin decirle dónde guardar los logs. Acá los logs
+# van a Cloud Logging (options.logging).
+#
+# En el trigger: Configuración > Tipo "Archivo de configuración de Cloud Build",
+# ubicación "/cloudbuild.yaml". Las variables del servicio (DATABASE_URL, etc.)
+# no se tocan: `gcloud run deploy --image` conserva las que ya tiene.
+substitutions:
+  _REGION: southamerica-east1
+  _SERVICIO: chedul-api
+  _IMAGEN: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/chedul-core/${_SERVICIO}
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGEN}:${COMMIT_SHA}", "."]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_IMAGEN}:${COMMIT_SHA}"]
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICIO}
+      - --image=${_IMAGEN}:${COMMIT_SHA}
+      - --region=${_REGION}
+      - --quiet
+
+images:
+  - ${_IMAGEN}:${COMMIT_SHA}
+
+options:
+  logging: CLOUD_LOGGING_ONLY
