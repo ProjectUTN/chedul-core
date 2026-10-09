@@ -23,6 +23,7 @@ type sesionRow struct {
 	ID            int64          `bun:"id"`
 	Modo          string         `bun:"modo"`
 	Minutos       int            `bun:"minutos"`
+	Inicio        string         `bun:"inicio"`
 	Fin           string         `bun:"fin"`
 	MateriaID     sql.NullInt64  `bun:"materia_id"`
 	MateriaNombre sql.NullString `bun:"materia_nombre"`
@@ -33,6 +34,7 @@ func (row sesionRow) toDomain() domain.SesionEstudio {
 		ID:      row.ID,
 		Modo:    row.Modo,
 		Minutos: row.Minutos,
+		Inicio:  row.Inicio,
 		Fin:     row.Fin,
 		Materia: materiaResumen(row.MateriaID, row.MateriaNombre),
 	}
@@ -54,6 +56,7 @@ func (r *estudioRepository) selectSesiones(alumnoID int64) *bun.SelectQuery {
 		TableExpr("sesion_estudio AS s").
 		ColumnExpr("s.id, s.modo, s.minutos").
 		ColumnExpr(`to_char(s.fin AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS fin`).
+		ColumnExpr(`to_char((s.fin - make_interval(mins => s.minutos)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS inicio`).
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
 		Join("LEFT JOIN materia AS m ON m.id = s.materia_id").
 		Where("s.alumno_id = ?", alumnoID)
@@ -98,6 +101,15 @@ func (r *estudioRepository) ListSesiones(ctx context.Context, alumnoID int64, li
 		sesiones[i] = row.toDomain()
 	}
 	return sesiones, nil
+}
+
+func (r *estudioRepository) SetMateriaSesion(ctx context.Context, alumnoID, id int64, materiaID *int64) error {
+	res, err := r.db.NewUpdate().
+		Model((*SesionEstudioModel)(nil)).
+		Set("materia_id = ?", materiaID).
+		Where("id = ? AND alumno_id = ?", id, alumnoID).
+		Exec(ctx)
+	return filasAfectadas(res, err, domain.ErrSesionNoEncontrada)
 }
 
 func (r *estudioRepository) DeleteSesion(ctx context.Context, alumnoID, id int64) error {

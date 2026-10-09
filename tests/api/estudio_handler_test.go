@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 )
@@ -11,6 +12,7 @@ type sesionTest struct {
 	ID      int64  `json:"id"`
 	Modo    string `json:"modo"`
 	Minutos int    `json:"minutos"`
+	Inicio  string `json:"inicio"`
 	Fin     string `json:"fin"`
 	Materia *struct {
 		ID     int64  `json:"id"`
@@ -172,6 +174,53 @@ func (s *EstudioHandlerSuite) TestRequiereSesion() {
 	c := NewClient(s.T(), s.app)
 	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/estudio/resumen", nil).Status)
 	s.Equal(http.StatusUnauthorized, c.JSON("GET", "/estudio/ranking", nil).Status)
+}
+
+func (s *EstudioHandlerSuite) TestEditarSoloLaMateriaDeUnaSesion() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Lola Paz", "lola.sesion@chedul.com")
+	aed := c.MateriaID("isi-aed")
+	so := c.MateriaID("isi-so")
+
+	resp := c.JSON("POST", "/estudio/sesiones", map[string]any{"modo": "pomodoro", "minutos": 25, "materia_id": aed})
+	s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+	var original sesionTest
+	resp.JSON(s.T(), &original)
+
+	fin, err := time.Parse(time.RFC3339, original.Fin)
+	s.Require().NoError(err)
+	inicio, err := time.Parse(time.RFC3339, original.Inicio)
+	s.Require().NoError(err)
+	s.Equal(25*time.Minute, fin.Sub(inicio), "el inicio es el fin menos la duracion")
+
+	// Cambia la materia y nada mas, aunque se mande otra cosa
+	resp = c.JSON("PUT", ruta("/estudio/sesiones/%d", original.ID), map[string]any{
+		"materia_id": so, "minutos": 1, "fin": "2020-01-01T00:00:00Z", "modo": "libre",
+	})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	var editada sesionTest
+	resp.JSON(s.T(), &editada)
+	s.Require().NotNil(editada.Materia)
+	s.Equal(so, editada.Materia.ID)
+	s.Equal(25, editada.Minutos)
+	s.Equal("pomodoro", editada.Modo)
+	s.Equal(original.Fin, editada.Fin)
+	s.Equal(original.Inicio, editada.Inicio)
+
+	// Sin materia
+	resp = c.JSON("PUT", ruta("/estudio/sesiones/%d", original.ID), map[string]any{"materia_id": nil})
+	s.Require().Equal(http.StatusOK, resp.Status, string(resp.Body))
+	resp.JSON(s.T(), &editada)
+	s.Nil(editada.Materia)
+
+	resp = c.JSON("PUT", ruta("/estudio/sesiones/%d", original.ID), map[string]any{"materia_id": 999999})
+	s.Equal(http.StatusUnprocessableEntity, resp.Status, string(resp.Body))
+
+	// No se puede tocar la sesion de otro alumno
+	otro := NewClient(s.T(), s.app)
+	otro.Registrar("Otro Alumno", "otro.sesion@chedul.com")
+	resp = otro.JSON("PUT", ruta("/estudio/sesiones/%d", original.ID), map[string]any{"materia_id": aed})
+	s.Equal(http.StatusNotFound, resp.Status, string(resp.Body))
 }
 
 func (s *EstudioHandlerSuite) TestTemporizadorSigueEntreDispositivos() {

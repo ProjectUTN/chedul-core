@@ -98,6 +98,45 @@ func (h *EstudioHandler) ListSesiones(c echo.Context) error {
 	return c.JSON(http.StatusOK, sesiones)
 }
 
+// UpdateSesion cambia la materia de una sesion; el resto (cuando empezo,
+// cuando termino, cuanto duro) queda como se registro.
+func (h *EstudioHandler) UpdateSesion(c echo.Context) error {
+	alumnoID, err := AlumnoID(c)
+	if err != nil {
+		return err
+	}
+	id, err := ParamID(c, "id")
+	if err != nil {
+		return err
+	}
+	var datos domain.DatosMateriaSesion
+	if err := c.Bind(&datos); err != nil {
+		return InvalidJSON()
+	}
+	datos.Normalizar()
+	ctx := c.Request().Context()
+	if datos.MateriaID != nil {
+		if _, err := h.materiaRepo.GetByID(ctx, *datos.MateriaID); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+			return InvalidRequestData(map[string]string{"materia_id": "La materia no existe"})
+		}
+	}
+	err = h.repo.SetMateriaSesion(ctx, alumnoID, id, datos.MateriaID)
+	if errors.Is(err, domain.ErrSesionNoEncontrada) {
+		return NotFound("Sesión")
+	}
+	if err != nil {
+		return err
+	}
+	sesion, err := h.repo.GetSesion(ctx, alumnoID, id)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, sesion)
+}
+
 func (h *EstudioHandler) DeleteSesion(c echo.Context) error {
 	alumnoID, err := AlumnoID(c)
 	if err != nil {

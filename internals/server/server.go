@@ -275,6 +275,7 @@ func (s *Server) SetupRoutes() {
 	estudio := protectedAPI.Group("/estudio")
 	estudio.GET("/sesiones", estudioHandler.ListSesiones)
 	estudio.POST("/sesiones", estudioHandler.CreateSesion)
+	estudio.PUT("/sesiones/:id", estudioHandler.UpdateSesion)
 	estudio.DELETE("/sesiones/:id", estudioHandler.DeleteSesion)
 	estudio.GET("/temporizador", estudioHandler.GetTemporizador)
 	estudio.PUT("/temporizador", estudioHandler.SetTemporizador)

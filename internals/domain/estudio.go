@@ -30,11 +30,12 @@ const (
 )
 
 // SesionEstudio es un rato de estudio que el alumno termino. Fin es cuando
-// termino, en RFC 3339.
+// termino, en RFC 3339; Inicio es Fin menos la duracion.
 type SesionEstudio struct {
 	ID      int64           `json:"id"`
 	Modo    string          `json:"modo"`
 	Minutos int             `json:"minutos"`
+	Inicio  string          `json:"inicio"`
 	Fin     string          `json:"fin"`
 	Materia *MateriaResumen `json:"materia"`
 }
@@ -43,6 +44,16 @@ type DatosSesion struct {
 	MateriaID *int64 `json:"materia_id"`
 	Modo      string `json:"modo"`
 	Minutos   int    `json:"minutos"`
+}
+
+// DatosMateriaSesion es lo unico que se puede cambiar de una sesion ya guardada
+type DatosMateriaSesion struct {
+	// nil o 0 dejan la sesion sin materia
+	MateriaID *int64 `json:"materia_id"`
+}
+
+func (d *DatosMateriaSesion) Normalizar() {
+	d.MateriaID = normalizarMateria(d.MateriaID)
 }
 
 func (d *DatosSesion) Normalizar() {
@@ -184,6 +195,8 @@ type EstudioRepository interface {
 	GetSesion(ctx context.Context, alumnoID, id int64) (*SesionEstudio, error)
 	ListSesiones(ctx context.Context, alumnoID int64, limite int) ([]SesionEstudio, error)
 	DeleteSesion(ctx context.Context, alumnoID, id int64) error
+	// SetMateriaSesion cambia la materia de la sesion (nil la deja sin materia)
+	SetMateriaSesion(ctx context.Context, alumnoID, id int64, materiaID *int64) error
 
 	// Desde y hasta son dias AAAA-MM-DD en la zona horaria de Argentina, inclusive
 	MinutosPorDia(ctx context.Context, alumnoID int64, desde, hasta string) ([]MinutosPorDia, error)
