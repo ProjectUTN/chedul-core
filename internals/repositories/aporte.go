@@ -276,7 +276,8 @@ func (r *aporteRepository) SetFavorito(ctx context.Context, aporteID, alumnoID i
 
 func (r *aporteRepository) Tags(ctx context.Context) ([]domain.AporteTag, error) {
 	var models []AporteTagModel
-	if err := r.db.NewSelect().Model(&models).Order("id ASC").Scan(ctx); err != nil {
+	// "Otro" va siempre al final, aunque se agreguen categorias despues
+	if err := r.db.NewSelect().Model(&models).OrderExpr("nombre = 'Otro' ASC, id ASC").Scan(ctx); err != nil {
 		return nil, err
 	}
 
