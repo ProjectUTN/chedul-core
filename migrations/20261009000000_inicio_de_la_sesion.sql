@@ -2,7 +2,7 @@
 --   Las sesiones de antes quedan en null y se muestran como fin menos duracion.
 -- +goose Up
 -- +goose StatementBegin
-alter table sesion_estudio add column inicio timestamptz;
+alter table sesion_estudio add column if not exists inicio timestamptz;
 -- +goose StatementEnd
 
 -- +goose Down
