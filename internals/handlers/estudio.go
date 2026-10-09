@@ -61,6 +61,7 @@ func (h *EstudioHandler) CreateSesion(c echo.Context) error {
 		return InvalidJSON()
 	}
 	datos.Normalizar()
+	datos.DescartarInicioInvalido(h.ahora())
 	errs := datos.Validate()
 	if datos.MateriaID != nil {
 		if _, err := h.materiaRepo.GetByID(c.Request().Context(), *datos.MateriaID); err != nil {

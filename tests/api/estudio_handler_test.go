@@ -223,6 +223,36 @@ func (s *EstudioHandlerSuite) TestEditarSoloLaMateriaDeUnaSesion() {
 	s.Equal(http.StatusNotFound, resp.Status, string(resp.Body))
 }
 
+func (s *EstudioHandlerSuite) TestSesionGuardaCuandoEmpezoDeVerdad() {
+	c := NewClient(s.T(), s.app)
+	c.Registrar("Nico Rey", "nico.inicio@chedul.com")
+
+	crear := func(minutos int, inicio time.Time) sesionTest {
+		resp := c.JSON("POST", "/estudio/sesiones", map[string]any{
+			"modo": "libre", "minutos": minutos, "inicio": inicio.UTC().Format(time.RFC3339),
+		})
+		s.Require().Equal(http.StatusCreated, resp.Status, string(resp.Body))
+		var sesion sesionTest
+		resp.JSON(s.T(), &sesion)
+		return sesion
+	}
+
+	// Con pausas: estudio 25 minutos pero empezo hace 40
+	empezo := time.Now().Add(-40 * time.Minute).Truncate(time.Second)
+	conPausas := crear(25, empezo)
+	inicio, err := time.Parse(time.RFC3339, conPausas.Inicio)
+	s.Require().NoError(err)
+	s.True(inicio.Equal(empezo), "se guarda el inicio real: %s vs %s", conPausas.Inicio, empezo)
+
+	// Un inicio imposible (en el futuro, o mas cerca del fin que la duracion) se ignora
+	for _, falso := range []time.Time{time.Now().Add(2 * time.Hour), time.Now().Add(-5 * time.Minute)} {
+		sesion := crear(30, falso)
+		fin, _ := time.Parse(time.RFC3339, sesion.Fin)
+		ini, _ := time.Parse(time.RFC3339, sesion.Inicio)
+		s.Equal(30*time.Minute, fin.Sub(ini), "vuelve a fin menos duracion")
+	}
+}
+
 func (s *EstudioHandlerSuite) TestTemporizadorSigueEntreDispositivos() {
 	celu := NewClient(s.T(), s.app)
 	celu.Registrar("Tomi Paz", "tomi.timer@chedul.com")

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/uptrace/bun"
 )
@@ -17,6 +18,8 @@ type SesionEstudioModel struct {
 	MateriaID     *int64 `bun:"materia_id"`
 	Modo          string `bun:"modo,notnull"`
 	Minutos       int    `bun:"minutos,notnull"`
+	// Puede faltar en las sesiones de antes: ahi el inicio es fin menos duracion
+	Inicio *time.Time `bun:"inicio"`
 }
 
 type sesionRow struct {
@@ -56,7 +59,7 @@ func (r *estudioRepository) selectSesiones(alumnoID int64) *bun.SelectQuery {
 		TableExpr("sesion_estudio AS s").
 		ColumnExpr("s.id, s.modo, s.minutos").
 		ColumnExpr(`to_char(s.fin AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS fin`).
-		ColumnExpr(`to_char((s.fin - make_interval(mins => s.minutos)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS inicio`).
+		ColumnExpr(`to_char(coalesce(s.inicio, s.fin - make_interval(mins => s.minutos)) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS inicio`).
 		ColumnExpr("m.id AS materia_id, m.nombre AS materia_nombre").
 		Join("LEFT JOIN materia AS m ON m.id = s.materia_id").
 		Where("s.alumno_id = ?", alumnoID)
@@ -68,6 +71,7 @@ func (r *estudioRepository) CreateSesion(ctx context.Context, alumnoID int64, da
 		MateriaID: datos.MateriaID,
 		Modo:      datos.Modo,
 		Minutos:   datos.Minutos,
+		Inicio:    datos.Inicio,
 	}
 	if _, err := r.db.NewInsert().Model(&model).Returning("id").Exec(ctx); err != nil {
 		return 0, err
